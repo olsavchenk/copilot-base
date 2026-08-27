@@ -26,7 +26,9 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { defaultCredits, fleetRoot, registry, worktreeRoot } from '../hooks/lib/config.mjs';
 import {
   IS_WINDOWS,
   delegatedArgs,
@@ -35,16 +37,14 @@ import {
   ensureDir,
   log,
   readJson,
-  repoRoot,
   slug,
   tryGit,
-  worktreeDir,
   writeJson,
   git,
 } from './lib/shared.mjs';
 
-const root = repoRoot();
-const fleetDir = join(root, '.fleet');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const fleetDir = fleetRoot();
 const statePath = join(fleetDir, 'state.json');
 
 const [command, ...rest] = process.argv.slice(2);
@@ -97,7 +97,7 @@ function incident(text) {
 
 function briefFor(dir) {
   if (flags.brief) {
-    const path = resolve(root, String(flags.brief));
+    const path = resolve(process.cwd(), String(flags.brief));
     if (existsSync(path)) return path;
     die(`brief file not found: ${path}`);
   }
@@ -109,17 +109,38 @@ function briefFor(dir) {
   die(`start needs --brief <file> or --prompt "<text>"`);
 }
 
-function workdirFor() {
-  const branch = flags.worktree ? String(flags.worktree) : null;
-  if (!branch) return { cwd: root, branch: tryGit(['symbolic-ref', '--short', 'HEAD'], root) };
+/** The repository a member works in: --repo name, --repo path, or the cwd's. */
+function repoFor() {
+  if (flags.repo) {
+    const entry = registry().find((r) => r.name === String(flags.repo));
+    if (entry) return { root: entry.path, label: entry.name };
+    const path = resolve(String(flags.repo));
+    if (tryGit(['rev-parse', '--git-dir'], path)) return { root: path, label: slug(String(flags.repo)) };
+    die(`no registered repository named '${flags.repo}' (node scripts/repos.mjs list)`);
+  }
+  const here = tryGit(['rev-parse', '--show-toplevel'], process.cwd());
+  if (!here) die('not in a git repository, and no --repo given');
+  const entry = registry().find(
+    (r) => r.path.replace(/\\/g, '/').toLowerCase() === here.replace(/\\/g, '/').toLowerCase()
+  );
+  return { root: here, label: entry?.name ?? here.split(/[\\/]/).pop() };
+}
 
-  const path = join(worktreeDir(root), slug(branch));
+function workdirFor(repo) {
+  const branch = flags.worktree ? String(flags.worktree) : null;
+  if (!branch) {
+    return { cwd: repo.root, branch: tryGit(['symbolic-ref', '--short', 'HEAD'], repo.root) };
+  }
+
+  const parent = join(worktreeRoot(), slug(repo.label));
+  const path = join(parent, slug(branch));
   if (!tryGit(['rev-parse', '--git-dir'], path)) {
-    ensureDir(worktreeDir(root));
-    const base = tryGit(['symbolic-ref', '--short', 'HEAD'], root) ?? 'main';
-    const exists = tryGit(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], root) !== null;
-    if (exists) git(['worktree', 'add', path, branch], root);
-    else git(['worktree', 'add', '-b', branch, path, base], root);
+    ensureDir(parent);
+    const base = tryGit(['symbolic-ref', '--short', 'HEAD'], repo.root) ?? 'main';
+    const exists =
+      tryGit(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], repo.root) !== null;
+    if (exists) git(['worktree', 'add', path, branch], repo.root);
+    else git(['worktree', 'add', '-b', branch, path, base], repo.root);
   }
   return { cwd: path, branch };
 }
@@ -128,7 +149,7 @@ function launch({ name, dir, cwd, sessionId, prompt, agent, resume }) {
   const args = delegatedArgs({
     prompt,
     agent,
-    credits: Number(flags.credits ?? 300),
+    credits: Number(flags.credits ?? defaultCredits()),
     model: flags.model,
     transcript: join(dir, 'transcript.md'),
   });
@@ -145,8 +166,10 @@ function launch({ name, dir, cwd, sessionId, prompt, agent, resume }) {
 
   writeJson(join(dir, 'spawn.json'), { args, cwd });
 
-  const runner = spawn(process.execPath, [join(root, 'scripts', 'lib', 'runner.mjs'), dir], {
-    cwd: root,
+  // Resolved from this file, not from a repository: the fleet is machine-wide
+  // and its members live in other people's checkouts.
+  const runner = spawn(process.execPath, [join(HERE, 'lib', 'runner.mjs'), dir], {
+    cwd,
     detached: !IS_WINDOWS,
     windowsHide: true,
     stdio: 'ignore',
@@ -166,7 +189,8 @@ function start() {
 
   const dir = ensureDir(memberDir(name));
   const brief = briefFor(dir);
-  const { cwd, branch } = workdirFor();
+  const repo = repoFor();
+  const { cwd, branch } = workdirFor(repo);
   const sessionId = randomUUID();
   const agent = flags.agent ? String(flags.agent) : 'implementer';
 
@@ -184,6 +208,8 @@ function start() {
     sessionId,
     pid,
     agent,
+    repo: repo.label,
+    repoPath: repo.root,
     cwd,
     branch,
     brief,
@@ -193,7 +219,7 @@ function start() {
   };
   saveState(current);
 
-  log(`${name}: session ${sessionId} started in ${cwd} (pid ${pid})`);
+  log(`${name}: session ${sessionId} started in ${repo.label} at ${cwd} (pid ${pid})`);
   log(`  transcript: ${join(dir, 'transcript.md')}`);
 }
 
@@ -209,12 +235,12 @@ function describe(m) {
 function list() {
   const members = Object.values(state().members);
   if (!members.length) return log('no fleet members');
-  log('Name            Status     Branch                Restarts  Session');
-  log('----------------------------------------------------------------------');
+  log('Name            Repo            Status     Branch             Restarts  Session');
+  log('--------------------------------------------------------------------------------');
   for (const m of members.map(describe)) {
     log(
-      `${pad(m.name, 15)} ${pad(m.status, 10)} ${pad(m.branch ?? '-', 21)} ` +
-        `${pad(String(m.restarts), 9)} ${m.sessionId.slice(0, 8)}`
+      `${pad(m.name, 15)} ${pad(m.repo ?? '-', 15)} ${pad(m.status, 10)} ` +
+        `${pad(m.branch ?? '-', 18)} ${pad(String(m.restarts), 9)} ${m.sessionId.slice(0, 8)}`
     );
   }
 }
@@ -227,6 +253,7 @@ function status() {
   log(`${m.name}: ${m.status}`);
   log(`  session   ${m.sessionId}`);
   log(`  agent     ${m.agent}`);
+  log(`  repo      ${m.repo ?? '-'} (${m.repoPath ?? '-'})`);
   log(`  cwd       ${m.cwd}`);
   log(`  branch    ${m.branch ?? '-'}`);
   log(`  restarts  ${m.restarts}`);

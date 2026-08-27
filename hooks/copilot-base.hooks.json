@@ -1,0 +1,76 @@
+{
+  "$comment": [
+    "Template. `node scripts/install.mjs` substitutes {{HOOKS}} for the absolute",
+    "path of the installed hooks directory and writes the result to",
+    "~/.copilot/hooks/copilot-base.json. Absolute paths are required: hook",
+    "commands are not tilde-expanded.",
+    "",
+    "User-level hooks fire in every repository, with no folder trust and no",
+    "opt-in environment variable - unlike repository hooks, which the CLI defers",
+    "until the folder is trusted. That is why this base installs here.",
+    "",
+    "matcher is a regex tested against toolName; the CLI anchors it as",
+    "^(?:PATTERN)$, so write alternations without your own anchors.",
+    "",
+    "What each guard reads comes from the machine config, not from the",
+    "repository being worked on:",
+    "  ~/.copilot/copilot-base/config/protected-paths   applies everywhere",
+    "  ~/.copilot/copilot-base/repos.json               per-repo verify command",
+    "A repository nobody registered gets the protected paths and nothing else.",
+    "",
+    "preToolUse fails closed: a hook that exits non-zero denies the call. Every",
+    "script here exits 0 unconditionally."
+  ],
+
+  "version": 1,
+
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "node \"{{HOOKS}}/session-brief.mjs\"",
+        "timeoutSec": 15
+      }
+    ],
+
+    "subagentStart": [
+      {
+        "type": "command",
+        "command": "node \"{{HOOKS}}/subagent-brief.mjs\"",
+        "timeoutSec": 15
+      }
+    ],
+
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "node \"{{HOOKS}}/guard-protected-paths.mjs\"",
+        "matcher": "create|edit|str_replace_editor|apply_patch|insert|delete|move",
+        "timeoutSec": 15
+      },
+      {
+        "type": "command",
+        "command": "node \"{{HOOKS}}/guard-main-branch.mjs\"",
+        "matcher": "bash|powershell|write_bash",
+        "timeoutSec": 15
+      }
+    ],
+
+    "postToolUse": [
+      {
+        "type": "command",
+        "command": "node \"{{HOOKS}}/verify-after-edit.mjs\"",
+        "matcher": "create|edit|str_replace_editor|apply_patch|insert",
+        "timeoutSec": 320
+      }
+    ],
+
+    "subagentStop": [
+      {
+        "type": "command",
+        "command": "node \"{{HOOKS}}/guard-subagent-done.mjs\"",
+        "timeoutSec": 320
+      }
+    ]
+  }
+}

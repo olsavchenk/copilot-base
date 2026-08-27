@@ -32,24 +32,31 @@ for a bounded parallel run, and come back to this later.
 ## Driving it
 
 ```
-node scripts/fleet.mjs start api --brief docs/plans/api.md --worktree feat/api --autopilot 20
+node scripts/fleet.mjs start orders --repo orders-api --brief plans/orders.md --worktree feat/email --autopilot 20
 node scripts/fleet.mjs list
-node scripts/fleet.mjs status api
-node scripts/fleet.mjs say api "the User schema changed - rebase onto main and adjust"
-node scripts/fleet.mjs restart api
-node scripts/fleet.mjs stop api
+node scripts/fleet.mjs status orders
+node scripts/fleet.mjs say orders "the User schema changed - rebase onto main and adjust"
+node scripts/fleet.mjs restart orders
+node scripts/fleet.mjs stop orders
 node scripts/fleet.mjs watch --interval 120 --max-restarts 3
 ```
 
-- **start** gives the member its own worktree and branch when `--worktree` is
-  passed, its own session id, and a credit cap. `--autopilot N` is what buys long
-  autonomy: the session continues itself up to N times instead of stopping at the
-  end of one turn.
+- **start** puts the member in a repository (`--repo <registry name or path>`,
+  defaulting to the one you are standing in), gives it its own worktree and
+  branch when `--worktree` is passed, its own session id, and a credit cap.
+  `--autopilot N` is what buys long autonomy: the session continues itself up to
+  N times instead of stopping at the end of one turn.
 - **say** takes a turn on an existing session, which is how you correct a member
   without restarting it and losing what it knows. It refuses while the member is
   still running - two processes on one session fight.
 - **watch** is the supervisor: it restarts members that died and stops trying
-  after `--max-restarts`, logging everything to `.fleet/incidents.log`.
+  after `--max-restarts`, logging to `~/.copilot/copilot-base/fleet/incidents.log`.
+
+The fleet is machine-wide, not per repository: state lives under
+`~/.copilot/copilot-base/fleet/`, so `list` shows every member across every
+repository you are working in, which is the view you want when a change is
+landing in five services at once. Members never push - delivery is `@rollout`'s
+job, and it obeys the delivery mode.
 
 ## On supervising the supervisors
 

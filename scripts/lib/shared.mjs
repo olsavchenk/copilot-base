@@ -1,12 +1,12 @@
 // Shared plumbing for the orchestration scripts.
 //
-// Zero dependencies on purpose: these run in a base that has been copied into
-// projects of every language, and `npm install` is not a reasonable
-// precondition for starting an agent.
+// Zero dependencies on purpose: these drive work in repositories of every
+// language, most of which are not JavaScript projects at all, and `npm install`
+// is not a reasonable precondition for starting an agent.
 
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 export const IS_WINDOWS = process.platform === 'win32';
 
@@ -29,11 +29,6 @@ export function repoRoot(cwd = process.cwd()) {
   const root = tryGit(['rev-parse', '--show-toplevel'], cwd);
   if (!root) die('not a git repository');
   return root;
-}
-
-/** Where worktrees go: a sibling directory, so they never nest inside the repo. */
-export function worktreeDir(root) {
-  return join(dirname(root), `${basename(root)}-wt`);
 }
 
 export function basename(p) {
@@ -123,13 +118,13 @@ export function spawnCopilot({ args, cwd, detached = false, onLine, onExit }) {
 }
 
 /**
- * Repository hooks are DEFERRED in prompt mode. The CLI loads them only when
- * the folder has been trusted interactively, or when this opt-in is set. A
- * delegated session without it runs with no protected-path guard, no branch
- * guard and no verification - silently, which is the dangerous part.
+ * This base installs its guards as user-level hooks, which fire everywhere. A
+ * repository may also carry its own `.github/hooks/*.json`, and those are
+ * DEFERRED in prompt mode unless the folder has been trusted or this opt-in is
+ * set - silently, which is the dangerous part.
  *
- * Every session these scripts start therefore carries the opt-in explicitly
- * rather than relying on whether someone happened to trust this folder.
+ * Every session these scripts start therefore carries the opt-in, so a
+ * repository's own hooks run too rather than being quietly skipped.
  */
 export function delegatedEnv(extra = {}) {
   return { ...process.env, GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS: 'true', ...extra };
@@ -191,6 +186,3 @@ export function newSummary() {
   return { events: 0, tools: 0, errors: 0, lastMessage: '' };
 }
 
-export function fileExists(path) {
-  return existsSync(resolve(path));
-}

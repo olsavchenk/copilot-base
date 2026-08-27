@@ -114,16 +114,25 @@ export function currentBranch(root) {
   }
 }
 
-/** Read one of the files under .github/copilot/, minus comments and blanks. */
-export function configLines(root, name) {
+/** A config file as lines, minus comments and blanks. Missing file: no lines. */
+export function fileLines(path) {
   try {
-    return readFileSync(resolve(root, '.github/copilot', name), 'utf8')
+    return readFileSync(path, 'utf8')
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line && !line.startsWith('#'));
   } catch {
     return [];
   }
+}
+
+/**
+ * A repository that adopted the per-repo layout can still carry its own files.
+ * Nothing creates these any more - the registry is where per-repo facts live -
+ * but honouring them keeps repositories set up under v1 working.
+ */
+export function repoConfigLines(root, name) {
+  return fileLines(resolve(root, '.github/copilot', name));
 }
 
 /**
@@ -135,7 +144,7 @@ export function configLines(root, name) {
  * directory glob then stops matching - silently, which turns the guard into
  * decoration rather than an error.
  */
-function canonicalDir(path) {
+export function canonicalDir(path) {
   try {
     return realpathSync.native(path);
   } catch {

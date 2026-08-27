@@ -4,18 +4,26 @@
 // Kept deliberately short. This text is prepended to every subagent prompt, so
 // it is paid for on every delegation - it carries the rules that are expensive
 // to get wrong, and nothing else.
+//
+// The repository name is in there because a delegated agent in a multi-repo
+// change is one of several working at once, and "which repo am I in" is the
+// first thing it needs to be sure of.
 
-import { addContext, configLines, currentBranch, readPayload, repoRoot, run } from './lib/hook-io.mjs';
+import { addContext, currentBranch, readPayload, repoRoot, run } from './lib/hook-io.mjs';
+import { protectedPatternsFor, repoEntry } from './lib/config.mjs';
 import { verifyCommand } from './lib/verify.mjs';
 
 run(async () => {
   const payload = await readPayload();
   const root = repoRoot(payload.cwd || process.cwd());
+  const entry = repoEntry(root);
 
-  const lines = ['Rules for delegated work in this repository:', ''];
+  const where = entry?.name ? `repository '${entry.name}'` : 'this repository';
+  const lines = [`Rules for delegated work in ${where}:`, ''];
 
   const branch = currentBranch(root);
   if (branch) lines.push(`- You are on branch '${branch}'. Never commit to main, master, develop or release/*.`);
+  lines.push(`- Working directory: ${root}. Do not edit files in any other repository.`);
 
   lines.push(
     '- Stay inside the file set you were given. If the work needs a file outside it, stop and report the collision instead of editing it - another agent may own it.',
@@ -30,7 +38,7 @@ run(async () => {
     );
   }
 
-  const protectedPaths = configLines(root, 'protected-paths');
+  const protectedPaths = protectedPatternsFor(root);
   if (protectedPaths.length) {
     lines.push(`- These are off limits without a human decision: ${protectedPaths.join(', ')}`);
   }

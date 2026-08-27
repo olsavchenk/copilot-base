@@ -1,174 +1,175 @@
 # copilot-base
 
-A starting point for projects built with GitHub Copilot CLI doing a lot of the
-work. Role definitions, workflow skills, deterministic guardrails, orchestration
-for parallel work, and the analysis behind the choices.
+A machine-level toolkit for working with GitHub Copilot CLI across **all** your
+repositories: role definitions, workflow skills, deterministic guardrails,
+orchestration for parallel and multi-repo work, and the analysis behind the
+choices.
 
-It is a **template you copy** or a **plugin you install**, not a dependency.
-Nothing here is tied to a language or a framework.
+Installed once into `~/.copilot`, active everywhere. Your work repositories get
+branches, commits and pull requests - nothing else is ever written into them.
 
-Requires Copilot CLI 1.0.80 or newer, and Node 20+ (the hooks and scripts are
-plain Node with no dependencies).
+Requires Copilot CLI 1.0.80 or newer and Node 20+ (no dependencies).
 
-## Quickstart
-
-```bash
-# new project
-git clone git@github.com:olsavchenk/copilot-base.git my-project
-cd my-project && rm -rf .git && git init -b main
-```
+## Install
 
 ```bash
-# existing project
-git clone --depth 1 git@github.com:olsavchenk/copilot-base.git /tmp/cb
-cp -r /tmp/cb/.github /tmp/cb/docs /tmp/cb/scripts /tmp/cb/AGENTS.md .
+git clone git@github.com:olsavchenk/copilot-base.git
+cd copilot-base
+node scripts/install.mjs
 ```
+
+That copies the agents to `~/.copilot/agents`, the skills to `~/.copilot/skills`,
+the hooks to `~/.copilot/copilot-base/hooks`, and registers them at
+`~/.copilot/hooks/copilot-base.json`.
+
+User-level hooks fire in **every** repository, with no folder trust and no opt-in
+variable. Repository hooks do not - the CLI defers them until the folder is
+trusted - and plugin installs register no hooks at all. That is why this installs
+here; the evidence is in [docs/copilot-cli-capabilities.md](docs/copilot-cli-capabilities.md).
+
+Then tell it which repositories you work in:
 
 ```bash
-# or install it as a plugin, leaving your repository alone
-copilot plugin install olsavchenk/copilot-base
+node scripts/repos.mjs scan D:/work          # look, and propose a check per repo
+node scripts/repos.mjs scan D:/work --add    # register them
+node scripts/repos.mjs check                 # prove those checks are green today
 ```
 
-Then, in Copilot CLI:
-
-```
-use the adopt skill
-```
-
-That reads the actual codebase and fills in the three things that are
-project-specific: the verification command, the protected paths, and an
-`AGENTS.md` written from real code rather than from a template.
+Registration is what opts a repository in. Until then it gets the machine-wide
+protected paths and nothing else - in particular **no check runs there**, which
+is what makes it safe to have this on while you read someone else's code.
 
 ## What is in here
 
 ```
-AGENTS.md                     operating contract, loaded automatically every session
-plugin.json                   makes the repo installable as a Copilot CLI plugin
-.github/
-  agents/                     roles, invoked with @name
-  skills/                     workflows, asked for by name
-  hooks/                      deterministic guardrails
-  copilot/verify-cmd          one shell line that proves the project works
-  copilot/protected-paths     globs no agent may edit without a human
+agents/          roles, invoked with @name in any repository
+skills/          workflows, asked for by name
+hooks/           guardrails + the template installed into ~/.copilot/hooks
+config/          machine-wide defaults: protected-paths, verify-cmd
 scripts/
-  check.mjs                   proves the guardrails behave as documented
-  wt.mjs                      git worktree helper
-  fanout.mjs                  parallel slices, one worktree and session each
-  fleet.mjs                   named, resumable, supervised sessions
+  install.mjs    install, update, uninstall
+  repos.mjs      the repository registry
+  check.mjs      proves the guardrails behave as documented
+  fanout.mjs     parallel slices across repos, in dependency waves
+  fleet.mjs      named, resumable, supervised sessions
+  wt.mjs         git worktree helper
 docs/
-  copilot-cli-capabilities.md what the CLI already does - read before building
-  multi-agent-playbook.md     topologies, economics, failure modes
-  workflows.md                runbooks per kind of work
+  copilot-cli-capabilities.md   what the CLI already does - read before building
+  multi-agent-playbook.md       topologies, economics, failure modes
+  workflows.md                  runbooks per kind of work
 ```
+
+State lives under `~/.copilot/copilot-base/`: `config.json`, `repos.json`,
+`worktrees/`, `runs/`, `fleet/`.
 
 ### Roles
 
 | Role | Job |
 |---|---|
-| `@tech-lead` | Decompose work into slices with interfaces and checks. Read-only; does not implement. |
+| `@tech-lead` | Decompose work into slices with interfaces, checks and a rollout order. Read-only. |
 | `@critic` | Attack a plan before it becomes code, and end with a verdict. |
 | `@implementer` | Build one slice inside its own file set and branch. |
 | `@test-author` | Tests from the spec, never from the implementation. |
-| `@integrator` | Merge parallel branches and verify the union, not the parts. |
-| `@docs-writer` | Keep `AGENTS.md`, README and ADRs true. |
+| `@integrator` | Merge parallel branches in one repo and verify the union. |
+| `@impact-scout` | Find every consumer of an API across repositories, before you change it. |
+| `@rollout` | Sequence a change across repositories and deliver it. |
+| `@docs-writer` | Keep AGENTS.md, READMEs and ADRs true. |
 
-Deliberately absent, because the CLI ships them: `@explore` (codebase recon),
-`@task` (command running), `@code-review`, `@security-review`, `@rubber-duck`.
-See [docs/copilot-cli-capabilities.md](docs/copilot-cli-capabilities.md).
+Deliberately absent, because the CLI ships them: `@explore`, `@task`,
+`@code-review`, `@security-review`, `@rubber-duck`.
 
 ### Workflows
 
 Skills, not slash commands - Copilot CLI's slash namespace is its own. Ask for
-one by name ("use the harden skill") or let the model pick it up from the
-description.
+one by name ("use the multi-repo skill").
 
 | Skill | What it runs |
 |---|---|
+| `workspace` | install/update, register repositories, set delivery mode |
 | `plan` | tech-lead drafts slices, critic attacks them, you get a reviewed plan |
-| `fanout` | the four-precondition gate, then `/fleet` or isolated worktrees, then integration |
+| `multi-repo` | impact scout, contract written once, waves, rollout |
+| `fanout` | the gate, then parallel slices in isolated worktrees |
 | `harden` | correctness, security and coverage review in parallel, ranked verdict |
-| `fleet` | when a long-running fleet is justified, and how to drive it |
-| `adopt` | wire this base into a real project |
+| `fleet` | long-running, addressable sessions across repositories |
 
 ### Guardrails
 
-Hooks are commands the CLI runs itself. Unlike a convention in a document, they
-do not depend on the model remembering.
+Hooks are commands the CLI runs itself, in every repository.
 
 | Hook | Event | Effect |
 |---|---|---|
-| `guard-protected-paths` | `preToolUse` | Denies edits to anything in `protected-paths`, with a reason |
-| `guard-main-branch` | `preToolUse` | Denies commits and pushes on `main`/`master`/`develop`/`release/*` |
-| `verify-after-edit` | `postToolUse` | Runs `verify-cmd` after code edits; failures come back into the transcript |
-| `guard-subagent-done` | `subagentStop` | Refuses a subagent's "done" while the check is red, and gives up after two tries with the failure attached |
-| `session-brief` | `sessionStart` | Branch, dirty state, recent commits and active worktrees, once |
-| `subagent-brief` | `subagentStart` | Prepends the file-set and verification rules to every delegated brief |
+| `guard-protected-paths` | `preToolUse` | Denies edits to protected globs, with a reason. Global list plus this repo's registry entry. |
+| `guard-main-branch` | `preToolUse` | Denies commits and pushes on `main`/`master`/`develop`/`release/*`. |
+| `verify-after-edit` | `postToolUse` | Runs the repo's registered check after edits; failures return to the transcript. |
+| `guard-subagent-done` | `subagentStop` | Refuses a subagent's "done" while the check is red; gives up after two tries with the failure attached. |
+| `session-brief` | `sessionStart` | Repo, branch, dirty state, worktrees, and other repos with work in progress. |
+| `subagent-brief` | `subagentStart` | Prepends the repo, file-set and verification rules to every delegated brief. |
 
-Switch one off by deleting its entry in `.github/hooks/copilot-base.json`, or the
-whole behaviour by deleting `verify-cmd` or `protected-paths`.
-
-**Repository hooks are deferred until the folder is trusted.** In an interactive
-session the CLI asks once and remembers. In `copilot -p` runs it does not ask -
-it silently skips them unless the folder is already trusted or
-`GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS=true` is set. The scripts here set it for
-every session they start; set it yourself in CI and in any `-p` run you care
-about:
-
-```bash
-GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS=true copilot -p "..." --allow-all-tools
-```
-
-Prove they work here, without waiting for a real trigger:
+Prove they work:
 
 ```bash
 node scripts/check.mjs
 ```
 
-That builds a throwaway repository, exercises every guard against it, and checks
-that everything the CLI loads is structurally valid. It is also what CI runs.
+That builds throwaway repositories and a throwaway `COPILOT_HOME`, exercises
+every guard, the config resolution, the wave ordering and the installer. It is
+what CI runs.
 
-### Parallel work
+### Multi-repo work
 
 ```bash
-node scripts/fanout.mjs run slices.json --dry-run   # see the gate and the briefs
+node scripts/fanout.mjs run slices.json --dry-run   # waves, briefs, branches
 node scripts/fanout.mjs run slices.json            # one worktree + session per slice
 node scripts/fanout.mjs report                     # last run, as a table
 ```
 
-Use `/fleet` instead when the slices only need disjoint files and one combined
-commit - it is cheaper and there is nothing to clean up. Use the script when
-slices need their own branches, or when the check binds a port, a database or a
-build directory that two agents cannot share.
+Slices name a `repo` from the registry and may declare `dependsOn`, which groups
+them into **waves**: providers finish and go green before consumers start, and a
+red wave stops the run rather than building consumers against a broken provider.
+
+Use `/fleet` instead when the work is in one repository, needs only disjoint
+files, and one combined commit is fine.
 
 ```bash
-node scripts/fleet.mjs start api --brief docs/plans/api.md --worktree feat/api --autopilot 20
-node scripts/fleet.mjs status api
-node scripts/fleet.mjs say api "the schema changed - rebase onto main"
+node scripts/fleet.mjs start orders --repo orders-api --brief plans/orders.md --worktree feat/email
+node scripts/fleet.mjs list      # every member, across every repository
+node scripts/fleet.mjs say orders "the schema changed - rebase onto main"
 node scripts/fleet.mjs watch
 ```
 
+### Delivery mode
+
+How finished work leaves the machine:
+
+| Mode | Behaviour |
+|---|---|
+| `local` (default) | Branches and commits. Nothing pushed; `@rollout` prints the push and PR sequence it would run. |
+| `pr` | Branches pushed, one cross-linked PR per repository, opened in dependency order. |
+
 ```bash
-node scripts/wt.mjs new feat/checkout   # isolated worktree + branch, by hand
-node scripts/wt.mjs ls
-node scripts/wt.mjs rm  feat/checkout   # refuses if dirty
-node scripts/wt.mjs gc                  # drop worktrees whose branch is merged
+node scripts/repos.mjs list                        # the effective mode per repo
+node scripts/repos.mjs set orders-api delivery pr  # one repository
 ```
+
+Resolution is: `--delivery` flag, then the repository's registry entry, then
+`~/.copilot/copilot-base/config.json`, then `local`. It defaults to `local`
+because pushing is outward-facing and awkward to undo - it should be something
+you turn on, not something you discover happened.
 
 ## Where to start
 
-Do not adopt all of it at once. The ladder is in
+The ladder is in
 [docs/multi-agent-playbook.md](docs/multi-agent-playbook.md#10-the-adoption-ladder);
 the short version:
 
-1. **Hooks and `AGENTS.md` only.** Highest return, lowest ceremony. Most projects
-   should sit here for a while.
-2. **`@explore` and `@critic`.** When context fills up, or when a design you
-   shipped turned out wrong.
+1. **Install, register your repos, set their checks.** Highest return, lowest
+   ceremony. Sit here for a while.
+2. **`@explore`, `@critic`, `@impact-scout`.** When context fills up, or when you
+   are about to change something other services consume.
 3. **`plan` then `harden`.** When work spans more than one sitting.
-4. **`fanout`.** When you have real tests and three or more genuinely independent
-   slices.
-5. **`fleet`.** When work outlives a session and you have something that can tell
-   done from stuck without you.
+4. **`fanout`.** When you have real checks and two or more independent slices.
+5. **`multi-repo`.** When one change has to land in several services together.
+6. **`fleet`.** When work outlives a session.
 
 The measure of whether any of it is working is not how many agents are running.
 It is whether you are writing **fewer** messages than before.

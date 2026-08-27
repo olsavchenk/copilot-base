@@ -1,17 +1,18 @@
 // The verification command, shared by the two hooks that run it: after an edit,
 // and before a subagent is allowed to report done.
 //
-// The command is one shell line in .github/copilot/verify-cmd. No file, or a
-// file with only comments in it, means no verification is configured and both
-// hooks stay out of the way - a project that has nothing to run pays nothing.
+// Where the command comes from is config.mjs's problem. What matters here is
+// that an unregistered repository returns nothing and both hooks stay silent -
+// a machine-wide install must not run some other project's test suite in a
+// repository you only opened to read.
 
 import { spawnSync } from 'node:child_process';
-import { configLines } from './hook-io.mjs';
+import { verifyCommandFor } from './config.mjs';
 
 const TIMEOUT_MS = 300_000;
 
 export function verifyCommand(root) {
-  return configLines(root, 'verify-cmd')[0] ?? null;
+  return verifyCommandFor(root);
 }
 
 /** Returns null when nothing is configured, otherwise {command, status, tail}. */
