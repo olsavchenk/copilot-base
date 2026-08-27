@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// The check for this repository: do the guardrails behave as documented, and is
-// everything the CLI loads structurally valid.
+// The check for this repository: do the guardrails behave as documented, does
+// config resolve the way the docs claim, and is everything the CLI loads
+// structurally valid.
 //
 //   node scripts/check.mjs
 //
-// The hook tests run against a throwaway git repository in the system temp
-// directory, so they exercise the real code paths - branch detection, config
-// reading, glob matching - without depending on the state of this one.
+// Everything runs against throwaway git repositories and a throwaway
+// COPILOT_HOME, so it exercises the real code paths - branch detection,
+// registry matching, glob matching, the installer - without touching your
+// machine's actual config.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -26,11 +28,12 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
-const HOOKS = join(ROOT, '.github', 'hooks');
+const HOOKS = join(ROOT, 'hooks');
 
 const probeId = `probe-${process.pid}-${Date.now()}`;
 let failures = 0;
 let checks = 0;
+const aliases = [];
 
 function check(name, condition, detail = '') {
   checks += 1;
@@ -46,11 +49,18 @@ function section(title) {
   process.stdout.write(`\n${title}\n`);
 }
 
+// ------------------------------------------------------------------ fixtures
+
+/** A throwaway COPILOT_HOME, so no test can read or write the real config. */
+const FAKE_HOME = mkdtempSync(join(tmpdir(), 'copilot-base-home-'));
+process.env.COPILOT_HOME = FAKE_HOME;
+
 /** Run a hook with a payload on stdin and return its stdout. */
 function hook(script, payload) {
   const result = spawnSync(process.execPath, [join(HOOKS, script)], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
+    env: { ...process.env, COPILOT_HOME: FAKE_HOME },
   });
   return (result.stdout ?? '').trim();
 }
@@ -63,41 +73,33 @@ function decision(output) {
   }
 }
 
-// ------------------------------------------------------------------ fixture
-
-function makeRepo() {
-  const dir = mkdtempSync(join(tmpdir(), 'copilot-base-check-'));
+function makeRepo(name) {
+  const dir = mkdtempSync(join(tmpdir(), `copilot-base-${name}-`));
   const run = (args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' });
 
   run(['init', '-b', 'main']);
   run(['config', 'user.email', 'check@example.invalid']);
   run(['config', 'user.name', 'check']);
-
-  mkdirSync(join(dir, '.github', 'copilot'), { recursive: true });
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(join(dir, 'src', 'app.ts'), 'export const ok = true;\n');
-  writeFileSync(
-    join(dir, '.github', 'copilot', 'protected-paths'),
-    '# test fixture\n.env\n**/secrets.*\ninfra/**\nmigrations/**\n'
-  );
-  writeFileSync(join(dir, '.github', 'copilot', 'verify-cmd'), '# nothing configured\n');
-
   run(['add', '-A']);
   run(['commit', '-m', 'fixture']);
   return { dir, run };
 }
 
-function setVerify(dir, line) {
-  writeFileSync(join(dir, '.github', 'copilot', 'verify-cmd'), `# fixture\n${line}\n`);
+function writeRegistry(repos) {
+  mkdirSync(join(FAKE_HOME, 'copilot-base'), { recursive: true });
+  writeFileSync(join(FAKE_HOME, 'copilot-base', 'repos.json'), JSON.stringify({ repos }, null, 2));
 }
 
-/**
- * A second, equally valid spelling of the same directory, or the input if the
- * platform will not give us one. A junction on Windows (no elevation needed,
- * unlike a symlink) and a symlink everywhere else.
- */
+function writeSettings(settings) {
+  mkdirSync(join(FAKE_HOME, 'copilot-base'), { recursive: true });
+  writeFileSync(join(FAKE_HOME, 'copilot-base', 'config.json'), JSON.stringify(settings, null, 2));
+}
+
+/** A second, equally valid spelling of a directory: junction or symlink. */
 function aliasFor(dir) {
-  const link = join(tmpdir(), `copilot-base-alias-${process.pid}`);
+  const link = join(tmpdir(), `copilot-base-alias-${process.pid}-${aliases.length}`);
   try {
     rmSync(link, { recursive: true, force: true });
     if (process.platform === 'win32') {
@@ -113,176 +115,414 @@ function aliasFor(dir) {
   }
 }
 
-const aliases = [];
+const registered = makeRepo('registered');
+const unregistered = makeRepo('unregistered');
 
-// ------------------------------------------------------------------ hooks
-
-const { dir: repo, run: gitIn } = makeRepo();
+writeRegistry([
+  {
+    name: 'registered-fixture',
+    path: registered.dir,
+    verify: 'exit 0',
+    protected: ['src/generated/**'],
+  },
+]);
+writeSettings({ delivery: 'local', credits: 200 });
 
 try {
+  // -------------------------------------------------------------- resolution
+
+  section('config resolution');
+
+  const config = await import('../hooks/lib/config.mjs');
+
+  check(
+    'a registered repository resolves its check',
+    config.verifyCommandFor(registered.dir) === 'exit 0'
+  );
+  check(
+    'an unregistered repository has no check',
+    config.verifyCommandFor(unregistered.dir) === null,
+    String(config.verifyCommandFor(unregistered.dir))
+  );
+  check(
+    'protected paths are the union of global and registry',
+    config.protectedPatternsFor(registered.dir).includes('.env') &&
+      config.protectedPatternsFor(registered.dir).includes('src/generated/**')
+  );
+  check(
+    'an unregistered repository still gets the global list',
+    config.protectedPatternsFor(unregistered.dir).includes('.env') &&
+      !config.protectedPatternsFor(unregistered.dir).includes('src/generated/**')
+  );
+  check(
+    'the registry matches through an aliased path',
+    config.repoEntry(aliasFor(registered.dir))?.name === 'registered-fixture'
+  );
+
+  section('delivery mode');
+
+  check('defaults to local', config.deliveryFor(registered.dir) === 'local');
+  check('an explicit flag wins', config.deliveryFor(registered.dir, 'pr') === 'pr');
+
+  writeRegistry([
+    { name: 'registered-fixture', path: registered.dir, verify: 'exit 0', protected: ['src/generated/**'], delivery: 'pr' },
+  ]);
+  check('a registry entry beats the machine setting', config.deliveryFor(registered.dir) === 'pr');
+  check(
+    'an unregistered repository follows the machine setting',
+    config.deliveryFor(unregistered.dir) === 'local'
+  );
+
+  writeSettings({ delivery: 'pr' });
+  check(
+    'the machine setting applies where nothing overrides it',
+    config.deliveryFor(unregistered.dir) === 'pr'
+  );
+  writeSettings({ delivery: 'local', credits: 200 });
+  writeRegistry([
+    { name: 'registered-fixture', path: registered.dir, verify: 'exit 0', protected: ['src/generated/**'] },
+  ]);
+
+  section('dependency waves');
+
+  const { waves } = await import('../scripts/fanout.mjs');
+  const ordered = waves([
+    { name: 'consumer', dependsOn: ['provider'] },
+    { name: 'provider' },
+    { name: 'other-consumer', dependsOn: ['provider'] },
+  ]);
+  check('providers run before consumers', ordered.length === 2 && ordered[0][0].name === 'provider');
+  check('independent consumers share a wave', ordered[1].length === 2);
+
+  let cycleRejected = false;
+  try {
+    waves([
+      { name: 'a', dependsOn: ['b'] },
+      { name: 'b', dependsOn: ['a'] },
+    ]);
+  } catch {
+    cycleRejected = true;
+  }
+  check('a cycle is rejected rather than hanging', cycleRejected);
+
+  // ------------------------------------------------------------------- hooks
+
   section('protected paths');
 
   check(
     'denies an edit to .env',
-    decision(hook('guard-protected-paths.mjs', { cwd: repo, toolName: 'edit', toolArgs: { path: '.env' } }))
+    decision(hook('guard-protected-paths.mjs', { cwd: registered.dir, toolName: 'edit', toolArgs: { path: '.env' } }))
       ?.permissionDecision === 'deny'
   );
-
   check(
     'allows an ordinary source file',
-    hook('guard-protected-paths.mjs', { cwd: repo, toolName: 'create', toolArgs: { path: 'src/app.ts' } }) === ''
+    hook('guard-protected-paths.mjs', { cwd: registered.dir, toolName: 'create', toolArgs: { path: 'src/app.ts' } }) === ''
   );
-
   check(
     'handles toolArgs sent as a JSON string',
     decision(
       hook('guard-protected-paths.mjs', {
-        cwd: repo,
+        cwd: registered.dir,
         toolName: 'edit',
         toolArgs: JSON.stringify({ path: 'infra/main.tf' }),
       })
     )?.permissionDecision === 'deny'
   );
-
   check(
     'reads file names out of an apply_patch body',
     decision(
       hook('guard-protected-paths.mjs', {
-        cwd: repo,
+        cwd: registered.dir,
         toolName: 'apply_patch',
         toolArgs: { input: '*** Update File: migrations/001.sql\n@@\n-a\n+b\n' },
       })
     )?.permissionDecision === 'deny'
   );
-
   check(
-    'matches a bare pattern by basename anywhere in the tree',
+    'enforces a pattern that only this repository declares',
     decision(
-      hook('guard-protected-paths.mjs', { cwd: repo, toolName: 'create', toolArgs: { path: 'packages/api/.env' } })
+      hook('guard-protected-paths.mjs', {
+        cwd: registered.dir,
+        toolName: 'create',
+        toolArgs: { path: 'src/generated/api.ts' },
+      })
     )?.permissionDecision === 'deny'
   );
-
-  // The payload cwd and git's toplevel do not always spell the same directory
-  // the same way: Windows hands out 8.3 short names in TEMP, and a symlinked
-  // checkout has two valid names. If the guard cannot see through that, every
-  // directory glob stops matching and it fails open without saying so.
-  const alias = aliasFor(repo);
+  check(
+    'does not apply one repository rule to another',
+    hook('guard-protected-paths.mjs', {
+      cwd: unregistered.dir,
+      toolName: 'create',
+      toolArgs: { path: 'src/generated/api.ts' },
+    }) === ''
+  );
   check(
     'denies through an equivalent but differently spelled cwd',
-    alias === repo ||
-      decision(
-        hook('guard-protected-paths.mjs', { cwd: alias, toolName: 'edit', toolArgs: { path: 'infra/main.tf' } })
-      )?.permissionDecision === 'deny',
-    alias === repo ? 'no alias available on this platform' : `alias: ${alias}`
+    decision(
+      hook('guard-protected-paths.mjs', {
+        cwd: aliasFor(registered.dir),
+        toolName: 'edit',
+        toolArgs: { path: 'infra/main.tf' },
+      })
+    )?.permissionDecision === 'deny'
   );
 
   section('integration branches');
 
   check(
     'denies a commit on main',
-    decision(hook('guard-main-branch.mjs', { cwd: repo, toolName: 'bash', toolArgs: { command: 'git commit -m x' } }))
+    decision(hook('guard-main-branch.mjs', { cwd: registered.dir, toolName: 'bash', toolArgs: { command: 'git commit -m x' } }))
       ?.permissionDecision === 'deny'
   );
-
   check(
-    'denies a push on main',
-    decision(hook('guard-main-branch.mjs', { cwd: repo, toolName: 'bash', toolArgs: { command: 'git push origin main' } }))
+    'denies a push on main in an unregistered repository too',
+    decision(hook('guard-main-branch.mjs', { cwd: unregistered.dir, toolName: 'bash', toolArgs: { command: 'git push origin main' } }))
       ?.permissionDecision === 'deny'
   );
-
   check(
     'allows an unrelated command',
-    hook('guard-main-branch.mjs', { cwd: repo, toolName: 'bash', toolArgs: { command: 'ls -la' } }) === ''
+    hook('guard-main-branch.mjs', { cwd: registered.dir, toolName: 'bash', toolArgs: { command: 'ls -la' } }) === ''
   );
-
   check(
     'honours the documented override',
     hook('guard-main-branch.mjs', {
-      cwd: repo,
+      cwd: registered.dir,
       toolName: 'bash',
       toolArgs: { command: 'COPILOT_BASE_ALLOW_DIRECT=1 git commit -m x' },
     }) === ''
   );
 
-  gitIn(['checkout', '-q', '-b', 'feat/probe']);
+  registered.run(['checkout', '-q', '-b', 'feat/probe']);
   check(
     'allows a commit on a feature branch',
-    hook('guard-main-branch.mjs', { cwd: repo, toolName: 'bash', toolArgs: { command: 'git commit -m x' } }) === ''
+    hook('guard-main-branch.mjs', { cwd: registered.dir, toolName: 'bash', toolArgs: { command: 'git commit -m x' } }) === ''
   );
 
   section('context injection');
 
-  const brief = decision(hook('session-brief.mjs', { cwd: repo, source: 'startup' }));
+  const brief = decision(hook('session-brief.mjs', { cwd: registered.dir, source: 'startup' }));
+  check('session brief names the registered repository', brief?.additionalContext?.includes('registered-fixture') === true);
   check('session brief reports the branch', brief?.additionalContext?.includes('feat/probe') === true);
-  check('session brief reports recent commits', brief?.additionalContext?.includes('fixture') === true);
 
-  const subagent = decision(hook('subagent-brief.mjs', { cwd: repo, agentName: 'implementer' }));
+  const strangerBrief = decision(hook('session-brief.mjs', { cwd: unregistered.dir, source: 'startup' }));
   check(
-    'subagent brief carries the file-set rule',
-    subagent?.additionalContext?.includes('Stay inside the file set') === true
+    'session brief says when a repository is not registered',
+    strangerBrief?.additionalContext?.includes('not registered') === true
   );
-  check(
-    'subagent brief lists the protected paths',
-    subagent?.additionalContext?.includes('infra/**') === true
-  );
+
+  const subagent = decision(hook('subagent-brief.mjs', { cwd: registered.dir, agentName: 'implementer' }));
+  check('subagent brief names the repository it is in', subagent?.additionalContext?.includes('registered-fixture') === true);
+  check('subagent brief carries the file-set rule', subagent?.additionalContext?.includes('Stay inside the file set') === true);
+  check('subagent brief lists the protected paths', subagent?.additionalContext?.includes('src/generated/**') === true);
 
   section('verification');
 
   check(
-    'stays quiet when no verify command is configured',
-    hook('verify-after-edit.mjs', { cwd: repo, toolName: 'edit', toolArgs: { path: 'src/app.ts' } }) === ''
+    'stays quiet in a repository with no check',
+    hook('verify-after-edit.mjs', { cwd: unregistered.dir, toolName: 'edit', toolArgs: { path: 'src/app.ts' } }) === ''
   );
 
-  setVerify(repo, 'exit 1');
-  const failed = decision(hook('verify-after-edit.mjs', { cwd: repo, toolName: 'edit', toolArgs: { path: 'src/app.ts' } }));
+  writeRegistry([{ name: 'registered-fixture', path: registered.dir, verify: 'exit 1' }]);
+  const failed = decision(hook('verify-after-edit.mjs', { cwd: registered.dir, toolName: 'edit', toolArgs: { path: 'src/app.ts' } }));
   check('feeds a failing check back into the transcript', failed?.additionalContext?.includes('Verification failed') === true);
 
-  const blocked = decision(hook('guard-subagent-done.mjs', { cwd: repo, agentId: probeId + '-1', response: 'all done' }));
+  const blocked = decision(hook('guard-subagent-done.mjs', { cwd: registered.dir, agentId: probeId + '-1', response: 'all done' }));
   check('refuses a subagent stop while the check is red', blocked?.decision === 'block');
-
-  const second = decision(hook('guard-subagent-done.mjs', { cwd: repo, agentId: probeId + '-1', response: 'all done' }));
+  const second = decision(hook('guard-subagent-done.mjs', { cwd: registered.dir, agentId: probeId + '-1', response: 'all done' }));
   check('refuses a second time', second?.decision === 'block');
-
-  const third = decision(hook('guard-subagent-done.mjs', { cwd: repo, agentId: probeId + '-1', response: 'all done' }));
+  const third = decision(hook('guard-subagent-done.mjs', { cwd: registered.dir, agentId: probeId + '-1', response: 'all done' }));
   check('gives up after the limit and labels the response red', third?.decision === 'allow');
   check(
     'the released response says the check is still failing',
     third?.modifiedResponse?.includes('VERIFICATION STILL FAILING') === true
   );
 
-  setVerify(repo, 'exit 0');
+  writeRegistry([{ name: 'registered-fixture', path: registered.dir, verify: 'exit 0' }]);
   check(
     'allows a subagent stop on a green check',
-    hook('guard-subagent-done.mjs', { cwd: repo, agentId: probeId + '-2', response: 'done' }) === ''
+    hook('guard-subagent-done.mjs', { cwd: registered.dir, agentId: probeId + '-2', response: 'done' }) === ''
   );
 
-  section('worktree helper');
+  section('worktrees');
 
-  const wt = (args) =>
-    spawnSync(process.execPath, [join(HERE, 'wt.mjs'), ...args], { cwd: repo, encoding: 'utf8' });
+  const wt = (args, cwd) =>
+    spawnSync(process.execPath, [join(HERE, 'wt.mjs'), ...args], {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: FAKE_HOME },
+    });
 
-  gitIn(['checkout', '-q', 'main']);
-  const created = wt(['new', 'feat/wt-probe']);
-  check('creates a worktree', created.status === 0 && existsSync(created.stdout.trim()), created.stderr?.trim());
-  check('lists it', wt(['ls']).stdout.includes('wt-probe'));
-  const removed = wt(['rm', 'feat/wt-probe']);
+  registered.run(['checkout', '-q', 'main']);
+  const created = wt(['new', 'feat/wt-probe', '--repo', 'registered-fixture'], ROOT);
+  const worktreePath = created.stdout.trim();
+  check('creates a worktree for a repository by name', created.status === 0 && existsSync(worktreePath), created.stderr?.trim());
+  check(
+    'puts it under the machine worktree root, not beside the repository',
+    worktreePath.replace(/\\/g, '/').includes('/copilot-base/worktrees/'),
+    worktreePath
+  );
+  check(
+    'a worktree still resolves to its registry entry',
+    config.repoEntry(worktreePath)?.name === 'registered-fixture'
+  );
+  const removed = wt(['rm', 'feat/wt-probe', '--repo', 'registered-fixture'], ROOT);
   check('removes it again', removed.status === 0, removed.stderr?.trim());
+
+  section('fan-out gate');
+
+  const planFile = join(FAKE_HOME, 'slices.json');
+  const fanout = (plan, extra = []) => {
+    writeFileSync(planFile, JSON.stringify(plan));
+    return spawnSync(process.execPath, [join(HERE, 'fanout.mjs'), 'run', planFile, ...extra], {
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: FAKE_HOME },
+    });
+  };
+
+  writeRegistry([
+    { name: 'registered-fixture', path: registered.dir, verify: 'exit 0' },
+    { name: 'second-fixture', path: unregistered.dir, verify: 'exit 0' },
+  ]);
+
+  check(
+    'refuses a slice whose agent is not installed',
+    fanout({
+      slices: [
+        { name: 'a', repo: 'registered-fixture', files: ['src/a/**'], brief: 'x' },
+        { name: 'b', repo: 'second-fixture', files: ['src/b/**'], brief: 'y' },
+      ],
+    }).stdout.includes("'implementer' agent, which is not installed")
+  );
+
+  // From here on, pretend the install has happened.
+  mkdirSync(join(FAKE_HOME, 'agents'), { recursive: true });
+  writeFileSync(join(FAKE_HOME, 'agents', 'implementer.agent.md'), '---\nname: implementer\ndescription: fixture\n---\n');
+
+  check(
+    'refuses a fan-out of one',
+    fanout({ slices: [{ name: 'solo', repo: 'registered-fixture', files: ['src/**'], brief: 'x' }] }).status === 1
+  );
+
+  check(
+    'refuses overlapping slices in one repository',
+    fanout({
+      slices: [
+        { name: 'a', repo: 'registered-fixture', files: ['src/api/**'], brief: 'x' },
+        { name: 'b', repo: 'registered-fixture', files: ['src/api/routes/**'], brief: 'y' },
+      ],
+    }).status === 1
+  );
+
+  check(
+    'allows the same file set in two different repositories',
+    fanout(
+      {
+        slices: [
+          { name: 'a', repo: 'registered-fixture', files: ['src/api/**'], brief: 'x' },
+          { name: 'b', repo: 'second-fixture', files: ['src/api/**'], brief: 'y' },
+        ],
+      },
+      ['--dry-run']
+    ).status === 0
+  );
+
+  check(
+    'refuses a slice naming an unknown repository',
+    fanout({
+      slices: [
+        { name: 'a', repo: 'registered-fixture', files: ['src/a/**'], brief: 'x' },
+        { name: 'b', repo: 'no-such-repo', files: ['src/b/**'], brief: 'y' },
+      ],
+    }).status === 1
+  );
+
+  const waved = fanout(
+    {
+      slices: [
+        { name: 'provider', repo: 'registered-fixture', files: ['src/api/**'], brief: 'x' },
+        { name: 'consumer', repo: 'second-fixture', dependsOn: ['provider'], files: ['src/client/**'], brief: 'y' },
+      ],
+    },
+    ['--dry-run']
+  );
+  check('plans a provider and its consumer as two waves', waved.stdout.includes('wave 2'), waved.stdout.trim().split('\n')[0]);
+  check(
+    'the dry run creates no worktree for its slices',
+    !existsSync(join(FAKE_HOME, 'copilot-base', 'worktrees', 'registered-fixture', 'feat-provider'))
+  );
+
+  section('worktree reuse');
+
+  const { makeWorktree, existingWorktree } = await import('../scripts/fanout.mjs');
+  const strayRoot = mkdtempSync(join(tmpdir(), 'copilot-base-stray-'));
+  const stray = join(strayRoot, 'claimed');
+  execFileSync('git', ['-C', registered.dir, 'worktree', 'add', '-b', 'feat/claimed', stray], { stdio: 'ignore' });
+
+  check('finds a branch already checked out elsewhere', Boolean(existingWorktree(registered.dir, 'feat/claimed')));
+
+  const reuse = makeWorktree(registered.dir, 'registered-fixture', 'feat/claimed');
+  check('reuses that checkout instead of failing', reuse.reused === true && reuse.elsewhere === true);
+
+  execFileSync('git', ['-C', registered.dir, 'worktree', 'remove', '--force', stray], { stdio: 'ignore' });
+  rmSync(strayRoot, { recursive: true, force: true });
+
+  section('install');
+
+  const installHome = mkdtempSync(join(tmpdir(), 'copilot-base-install-'));
+  const install = (args) =>
+    spawnSync(process.execPath, [join(HERE, 'install.mjs'), ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_HOME: installHome },
+    });
+
+  const dry = install(['--dry-run']);
+  check('dry run writes nothing', dry.status === 0 && !existsSync(join(installHome, 'agents')));
+
+  const installed = install([]);
+  check('installs agents', installed.status === 0 && readdirSync(join(installHome, 'agents')).length >= 8);
+  check('installs skills', existsSync(join(installHome, 'skills', 'multi-repo', 'SKILL.md')));
+  check('registers the hooks', existsSync(join(installHome, 'hooks', 'copilot-base.json')));
+
+  const registration = JSON.parse(readFileSync(join(installHome, 'hooks', 'copilot-base.json'), 'utf8'));
+  const commands = Object.values(registration.hooks).flat().map((entry) => entry.command);
+  check('no placeholder survives into the registration', !commands.some((c) => c.includes('{{')));
+  check(
+    'every hook command points at a file that exists',
+    commands.every((command) => {
+      const path = command.match(/"([^"]+)"/)?.[1];
+      return path && existsSync(path);
+    }),
+    commands[0]
+  );
+  check('creates settings and a registry', existsSync(join(installHome, 'copilot-base', 'config.json')));
+  check(
+    'delivery starts as local on a fresh install',
+    JSON.parse(readFileSync(join(installHome, 'copilot-base', 'config.json'), 'utf8')).delivery === 'local'
+  );
+
+  const uninstalled = install(['--uninstall']);
+  check('uninstall removes the agents', uninstalled.status === 0 && !existsSync(join(installHome, 'agents', 'rollout.agent.md')));
+  check('uninstall removes the registration', !existsSync(join(installHome, 'hooks', 'copilot-base.json')));
+  check('uninstall keeps your registry unless purged', existsSync(join(installHome, 'copilot-base', 'repos.json')));
+
+  rmSync(installHome, { recursive: true, force: true });
 } finally {
-  rmSync(repo, { recursive: true, force: true });
-  const siblings = join(dirname(repo), `${repo.split(/[\\/]/).pop()}-wt`);
-  rmSync(siblings, { recursive: true, force: true });
-  for (const link of aliases) rmSync(link, { force: true });
+  for (const dir of [registered.dir, unregistered.dir, FAKE_HOME]) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  for (const link of aliases) {
+    try {
+      if (process.platform === 'win32') spawnSync('cmd', ['/c', 'rmdir', link], { stdio: 'ignore' });
+      else rmSync(link, { force: true });
+    } catch {
+      // best effort
+    }
+  }
 }
 
 // ------------------------------------------------------------------ structure
 
 section('structure');
-
-const manifest = JSON.parse(readFileSync(join(ROOT, 'plugin.json'), 'utf8'));
-check('plugin.json has a name and a description', Boolean(manifest.name && manifest.description));
-for (const key of ['agents', 'skills', 'hooks']) {
-  check(`plugin.json ${key} path exists`, existsSync(join(ROOT, manifest[key])), manifest[key]);
-}
 
 const KNOWN_EVENTS = new Set([
   'sessionStart',
@@ -301,13 +541,14 @@ const KNOWN_EVENTS = new Set([
   'notification',
 ]);
 
-const hookConfig = JSON.parse(readFileSync(join(HOOKS, 'copilot-base.json'), 'utf8'));
-check('hook config declares version 1', hookConfig.version === 1);
-for (const [event, entries] of Object.entries(hookConfig.hooks)) {
+const template = JSON.parse(readFileSync(join(HOOKS, 'copilot-base.hooks.json'), 'utf8'));
+check('hook template declares version 1', template.version === 1);
+for (const [event, entries] of Object.entries(template.hooks)) {
   check(`${event} is a documented hook event`, KNOWN_EVENTS.has(event));
   for (const entry of entries) {
-    const script = String(entry.command).split(/\s+/).pop().replace('./', '');
-    check(`${event} -> ${script} exists`, existsSync(join(HOOKS, script)));
+    const script = entry.command.match(/\{\{HOOKS\}\}\/([\w-]+\.mjs)/)?.[1];
+    check(`${event} -> ${script ?? entry.command} uses the {{HOOKS}} placeholder`, Boolean(script));
+    if (script) check(`${event} -> ${script} exists`, existsSync(join(HOOKS, script)));
     if (entry.matcher) {
       let valid = true;
       try {
@@ -320,39 +561,27 @@ for (const [event, entries] of Object.entries(hookConfig.hooks)) {
   }
 }
 
-// Repository hooks are deferred in prompt mode unless the folder is trusted or
-// this opt-in is set. Losing it would disable every guardrail in delegated
-// sessions without a single error message, so it is checked rather than trusted.
-const sharedSource = readFileSync(join(HERE, 'lib', 'shared.mjs'), 'utf8');
-check(
-  'delegated sessions opt in to repository hooks',
-  sharedSource.includes('GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS')
-);
-for (const script of ['fanout.mjs', 'fleet.mjs']) {
-  const source = readFileSync(join(HERE, script), 'utf8');
-  const spawnsDirectly = /spawnSync\('copilot'/.test(source);
-  check(
-    `${script} passes the hook opt-in to every session it starts`,
-    !spawnsDirectly || source.includes('delegatedEnv()')
-  );
-}
-
 for (const [dir, pattern, label] of [
-  [join(ROOT, '.github', 'agents'), /\.agent\.md$/, 'agent'],
-  [join(ROOT, '.github', 'skills'), /SKILL\.md$/, 'skill'],
+  [join(ROOT, 'agents'), /\.agent\.md$/, 'agent'],
+  [join(ROOT, 'skills'), /SKILL\.md$/, 'skill'],
 ]) {
   for (const file of walk(dir).filter((f) => pattern.test(f))) {
     const text = readFileSync(file, 'utf8');
     const name = file.slice(ROOT.length + 1);
-    // Tolerate CRLF: a Windows checkout without .gitattributes produces it, and
-    // the frontmatter is still valid.
+    // Tolerate CRLF: a Windows checkout without .gitattributes produces it.
     check(`${label} ${name} starts with frontmatter`, /^---\r?\n/.test(text));
     check(`${label} ${name} has a description`, /^description:/m.test(text.split('---')[1] ?? ''));
   }
 }
 
-const scripts = [...walk(HERE), ...walk(HOOKS)].filter((f) => f.endsWith('.mjs'));
-for (const file of scripts) {
+// Losing this would disable every guardrail in delegated sessions silently.
+const sharedSource = readFileSync(join(HERE, 'lib', 'shared.mjs'), 'utf8');
+check(
+  'delegated sessions opt in to repository hooks',
+  sharedSource.includes('GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS')
+);
+
+for (const file of [...walk(HERE), ...walk(HOOKS)].filter((f) => f.endsWith('.mjs'))) {
   const parsed = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
   check(`${file.slice(ROOT.length + 1)} parses`, parsed.status === 0, parsed.stderr?.split('\n')[2]);
 }

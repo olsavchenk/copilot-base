@@ -118,9 +118,26 @@ Two behaviours worth knowing before you write one:
 `toolArgs` may arrive as an object or as a JSON-encoded string depending on the
 build (github/copilot-cli#3349). Parse defensively.
 
-### Repository hooks are deferred until the folder is trusted
+### User-level hooks fire everywhere; repository hooks do not
 
-This one is worth knowing before you trust a guardrail. In prompt mode
+The single most useful finding for a machine-wide setup, and the reason this base
+installs into `~/.copilot` rather than copying itself into projects.
+
+**`~/.copilot/hooks/*.json` fires in every repository**, including one you have
+never opened before, in non-interactive `-p` mode, with no folder trust and no
+opt-in variable. Verified in an unrelated scratch repository: a `sessionStart`
+hook injected context the model quoted back, and a `preToolUse` hook denied a
+file creation that then did not exist.
+
+Two practical consequences:
+
+- Hook commands are **not** tilde-expanded. `node ~/.copilot/...` silently does
+  nothing; use an absolute path. `scripts/install.mjs` substitutes one in.
+- A user-level hook applies to every project on the machine, so whatever it
+  enforces must be true everywhere. Anything repository-specific belongs behind a
+  registry lookup, which is what `hooks/lib/config.mjs` does.
+
+**Repository hooks are deferred until the folder is trusted.** In prompt mode
 (`copilot -p ...`) the CLI loads `.github/hooks/*.json` **only** when one of
 these is true:
 
@@ -132,17 +149,29 @@ Otherwise the session runs with no protected-path guard, no branch guard and no
 verification - and says nothing about it. The debug log is the only tell:
 *"Loading repo hooks in prompt mode (folder is trusted or opt-in set)"*.
 
-Everything in `scripts/` sets the opt-in explicitly for the sessions it starts,
-rather than depending on whether someone happened to trust the folder. Do the
-same in CI. Verified empirically: a `sessionStart` hook that writes a marker file
-does not run without it, and does with it.
+Otherwise the session runs with no guards and says nothing about it. The debug
+log is the only tell: *"Loading repo hooks in prompt mode (folder is trusted or
+opt-in set)"*. Everything in `scripts/` sets the opt-in for the sessions it
+starts, so a repository that carries its own hooks still gets them; the base's
+own guards do not depend on it.
 
-Both command forms resolve against the repository root, so either works:
+For repository hooks, both command forms resolve against the repository root:
 
 ```json
 { "command": "node ./guard.mjs", "cwd": ".github/hooks" }
 { "command": "node .github/hooks/guard.mjs" }
 ```
+
+### Plugins are not a way to ship hooks
+
+`copilot plugin install <owner>/<repo>` of this base reported *"Installed 5
+skills"* - the skills loaded, the agents loaded but **namespaced** as
+`copilot-base:tech-lead` (which breaks every `@tech-lead` reference), and the
+hooks did not load at all. The CLI also warns that direct repo, URL and local
+path installs are deprecated in favour of marketplace installs.
+
+So: plugins are a fine way to distribute skills, and a bad way to distribute a
+guardrail system. This base uses a plain installer instead.
 
 ## Permissions
 
@@ -252,14 +281,22 @@ case.
 
 ## What this base adds, and why
 
-Only two things are missing for the way this base works, and everything in
-`scripts/` exists because of them:
+Four gaps, and everything in `scripts/` exists because of them:
 
 1. **No custom slash commands.** Workflows are skills instead. Cost: you ask for
    them by name rather than typing `/name`.
 2. **No filesystem isolation between parallel agents.** `scripts/fanout.mjs`
    gives each slice a git worktree, its own branch, its own capped session, its
    own transcript and its own check run.
+3. **No notion of "which repository is this, and what proves it works".** A
+   user-level hook runs everywhere, which means it needs a per-repository answer
+   from somewhere. `scripts/repos.mjs` keeps that registry outside the
+   repositories, and `hooks/lib/config.mjs` is the only thing that reads it.
+4. **No ordering between parallel units, and no cross-repository delivery.**
+   `/fleet` dispatches independent subtasks; nothing expresses "the provider has
+   to be green before the consumers start", and nothing sequences branches in
+   five repositories into a reviewable set of pull requests. Waves in
+   `fanout.mjs` and the `@rollout` agent cover those.
 
 `scripts/fleet.mjs` is a thinner argument: the CLI has everything needed for
 long-lived work (named sessions, resume, autopilot, credit caps) but nothing that

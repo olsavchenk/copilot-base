@@ -78,6 +78,39 @@ plausible thing found. Separate the steps.
 
 ---
 
+## API change across several repositories
+
+**Topology:** fan-out across repositories, in dependency waves.
+
+The full runbook is the `multi-repo` skill; this is the shape of it and the
+places it goes wrong.
+
+1. **`@impact-scout` first**, with the concrete identifier - the route, the type,
+   the field - not the feature name. Everything downstream is built on its list of
+   consumers, and the consumer nobody remembered is the usual reason a rollout
+   fails halfway.
+2. **Register every affected repository** before planning:
+   `node scripts/repos.mjs add <path> --verify "<check>"`. An unregistered
+   repository has no check, so a slice there cannot be graded.
+3. **Write the contract once**, verbatim, and say what each consumer resolves it
+   *from* - a package version, a generated client, a spec file. Two repositories
+   cannot share a type by agreeing to.
+4. **Plan it as waves.** Provider slices have no dependencies; consumer slices
+   declare `dependsOn` on the provider. The `plan` skill emits `slices.json` in
+   the shape `fanout.mjs` expects.
+5. **Run it.** `node scripts/fanout.mjs run slices.json --dry-run` first: it
+   prints the waves, the branches and the briefs without spawning anything.
+6. **Roll out** with `@rollout`, which keeps the order and obeys the delivery
+   mode - `local` prints the push and PR sequence, `pr` opens the cross-linked
+   pull requests.
+7. **Harden the provider.** It is the one whose mistake reaches everybody.
+
+**Cut point:** if the change is backwards compatible, stop after the provider.
+Consumers can move at their own pace, and a coordinated rollout you did not need
+is expensive.
+
+---
+
 ## Systematic refactor / migration
 
 **Topology:** fan-out. This is the pattern's best case.
@@ -109,13 +142,14 @@ inconsistent answers.
 
 1. Write the brief as a file. It has to survive restarts and be re-readable by
    the member: what to build, the file set, the interface, the check.
-2. `node scripts/fleet.mjs start <name> --brief <file> --worktree feat/<name>
-   --autopilot 20 --credits 400`
+2. `node scripts/fleet.mjs start <name> --repo <registry name> --brief <file>
+   --worktree feat/<name> --autopilot 20 --credits 400`
 3. `node scripts/fleet.mjs watch` in a spare terminal, or check `status` when you
    think of it. Silence from a member is not evidence of progress.
 4. Correct it with `say` rather than restarting it - a restart loses what it
    learned; a turn on the same session does not.
-5. When it finishes, review the branch like any other: `harden`, then PR.
+5. When it finishes, review the branch like any other: `harden`, then deliver it
+   the way the delivery mode says - members never push.
 
 Rules for anything unattended:
 

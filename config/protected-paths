@@ -1,0 +1,22 @@
+# Globs no agent may edit without a human decision, in EVERY repository on this
+# machine - registered or not. One per line, repo-relative, shell-style globs.
+# A pattern with no slash matches by file name anywhere in the tree.
+#
+# Keep this list to things that are dangerous everywhere. Per-repository
+# additions belong in the registry entry:
+#   node scripts/repos.mjs list        (the "protected" field on an entry)
+# Those are added to this list; they cannot weaken it.
+#
+# The CLI can enforce a second, coarser layer without a hook:
+#   copilot --deny-tool='write(.env)'
+# The hook is here because it gives the agent a reason it can act on.
+.env
+.env.*
+**/secrets.*
+**/*.pem
+**/id_rsa
+.github/workflows/**
+infra/**
+**/infra/**
+migrations/**
+**/migrations/**

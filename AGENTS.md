@@ -1,71 +1,80 @@
 # AGENTS.md
 
-Operating contract for agents working in this repository. Read this before
-doing anything else. GitHub Copilot CLI loads this file automatically.
+Operating contract for agents working in **this** repository - the toolkit
+itself. Copilot CLI loads this file automatically.
 
-> **If you are adopting this base into a real project**, use the `adopt` skill -
-> it rewrites this file from that project's actual code. Everything below the
-> line marked *Project-specific* is a placeholder until you do.
+If you are looking for how to use the toolkit in your own work, that is the
+`workspace` skill and [README.md](README.md), not this file.
 
 ## What this repository is
 
-A base for agent-assisted development with GitHub Copilot CLI: role definitions,
-workflow skills, deterministic guardrails, orchestration scripts, and the
-reasoning behind them ([docs/multi-agent-playbook.md](docs/multi-agent-playbook.md)).
-It is copied into new projects or installed as a plugin, not depended on as a
-package.
+A machine-level toolkit for agent-assisted development with GitHub Copilot CLI:
+role definitions (`agents/`), workflow skills (`skills/`), deterministic
+guardrails (`hooks/`), orchestration for parallel and multi-repo work
+(`scripts/`), and the reasoning behind them
+([docs/multi-agent-playbook.md](docs/multi-agent-playbook.md)).
+
+It is **installed**, not copied into projects: `node scripts/install.mjs` puts
+the agents, skills and hooks under `~/.copilot`, where they apply in every
+repository on the machine. Per-repository facts live in a registry at
+`~/.copilot/copilot-base/repos.json`, never in the repositories themselves.
 
 ## Non-negotiables
-
-These hold in every project built from this base.
 
 1. **Never commit to `main`, `master`, `develop` or `release/*`.** Work happens
    on a branch and arrives through a PR. A hook enforces this; do not route
    around it.
-2. **Never edit anything matched by `.github/copilot/protected-paths`.** If a
-   change genuinely requires it, say what and why, and ask.
-3. **Never report work complete on a failing check.** If the check fails, fix it
-   or say plainly that it fails and why. For subagents this is enforced: the
-   `subagentStop` hook blocks a completion while the verify command is red.
+2. **Never write anything into a work repository except code changes.** No
+   config files, no run artifacts, no worktrees. Everything the toolkit needs
+   lives under `~/.copilot/copilot-base/`. This one is load-bearing: people use
+   this on repositories they do not own.
+3. **Never report work complete on a failing check.** For subagents this is
+   enforced: the `subagentStop` hook blocks a completion while the check is red.
 4. **Every claim about existing behaviour carries a `file:line`.** If you have
    not read it, do not assert it.
 5. **Stay inside the file set you were given.** If the work requires a file
-   outside it, stop and report the collision. Another agent may own that file.
+   outside it, stop and report the collision. Another agent may own that file,
+   possibly in another repository.
 6. **Do not reimplement what the CLI already ships.** See the table below.
+7. **Never push or open a pull request unless delivery mode says so.** The mode
+   is configuration, not a judgement call: `local` means branches and commits
+   only, however finished the work looks.
 
 ## Do not rebuild these
 
-Copilot CLI provides them; a hand-rolled copy is worse and costs credits.
-
 | Instead of writing... | Use |
 |---|---|
-| a codebase-search role | built-in `explore` agent - cheap model, read-only, safe in parallel |
-| a code-review role | built-in `code-review` agent, or `/review` |
-| a security-review role | built-in `security-review` agent, or `/security-review` |
-| a generic second opinion | built-in `rubber-duck` agent, or `/rubber-duck` |
-| a shell-output summariser | built-in `task` agent - runs a command, returns a summary on success, full output on failure |
-| your own parallel dispatcher | `/fleet` for in-tree work, `scripts/fanout.mjs` when slices need their own branch |
-| your own agent messaging | `list_agents`, `read_agent`, `write_agent` |
+| a codebase-search role | built-in `@explore` - cheap model, read-only, safe in parallel |
+| a code-review role | built-in `@code-review`, or `/review` |
+| a security-review role | built-in `@security-review`, or `/security-review` |
+| a generic second opinion | built-in `@rubber-duck` |
+| a shell-output summariser | built-in `@task` |
+| your own parallel dispatcher | `/fleet` in one tree, `scripts/fanout.mjs` across branches or repos |
+| your own agent messaging | `list_agents`, `read_agent`, `write_agent`, or `fleet say` |
 | your own budget guard | `--max-ai-credits`, `/limits` |
 
-The full inventory, with what is native and what this repo adds, is in
+The full inventory is in
 [docs/copilot-cli-capabilities.md](docs/copilot-cli-capabilities.md). Read it
 before building anything that sounds like infrastructure.
 
 ## Where things live
 
-| Thing | Path | How it is invoked |
+| Thing | Path | Installed to |
 |---|---|---|
-| Roles | `.github/agents/*.agent.md` | `@name` in a prompt, `/agent name`, `--agent name` |
-| Workflows | `.github/skills/<name>/SKILL.md` | ask for it by name: "use the harden skill" |
-| Guardrails | `.github/hooks/copilot-base.json` + `*.mjs` | the CLI runs them; nothing to invoke |
-| Verification command | `.github/copilot/verify-cmd` | run by the hooks after edits and before a subagent may finish |
-| Protected paths | `.github/copilot/protected-paths` | read by the path guard |
-| Parallel work | `scripts/fanout.mjs`, `scripts/fleet.mjs`, `scripts/wt.mjs` | `node scripts/<name>.mjs` |
+| Roles | `agents/*.agent.md` | `~/.copilot/agents/` |
+| Workflows | `skills/<name>/SKILL.md` | `~/.copilot/skills/` |
+| Guardrails | `hooks/*.mjs` + `hooks/copilot-base.hooks.json` | `~/.copilot/copilot-base/hooks/` + `~/.copilot/hooks/copilot-base.json` |
+| Machine defaults | `config/protected-paths`, `config/verify-cmd` | `~/.copilot/copilot-base/config/` |
+| Registry and settings | - | `~/.copilot/copilot-base/repos.json`, `config.json` |
+| Orchestration | `scripts/*.mjs` | run from this checkout |
 
 Workflows are skills and roles are agents, deliberately. A skill loads into the
 **main** agent's context, so it can orchestrate subagents. An agent *is* a
 subagent, and a subagent orchestrating subagents is not something to bet on.
+
+Scripts are **not** installed: they run from this checkout, so anything that
+resolves a path must do so from `import.meta.url` or from the payload's `cwd` -
+never from "the current repository", which is usually somebody else's.
 
 ## How work is sized
 
@@ -74,8 +83,9 @@ subagent, and a subagent orchestrating subagents is not something to bet on.
 | One file, one sitting | Do it. No plan, no delegation. |
 | Several files, one concern | Do it, sending `@explore` first if you need to locate things. |
 | Multiple concerns, one session | `plan` skill, then implement in order. |
-| Multiple independent slices, one branch | `/fleet`. |
-| Multiple independent slices, own branches | `fanout` skill. |
+| Independent slices, one repo, one commit | `/fleet`. |
+| Independent slices needing their own branches | `fanout` skill. |
+| One change across several repositories | `multi-repo` skill. |
 | Anything touching auth, money, personal data | `harden` skill before the PR. |
 
 Delegation has a floor cost. If explaining the task takes longer than doing it,
@@ -84,30 +94,31 @@ do it.
 ## Delegation rules
 
 - **Give a slice, not the whole plan.** Extra context is extra ways to wander.
-- **Write interfaces down before parallel work starts.** Verbatim: the actual
-  type, signature, or schema. Agents that each invent one produce two half
-  systems.
-- **Fan out only on disjoint file sets.** Overlap means the slices are one slice.
-- **Integration is a stage, not a `git merge`.** Every slice can pass its own
-  check while the union fails.
-- **Send `@explore` for volume.** Anything that produces output you will not need
-  again belongs in a subagent's context, not yours.
-- **Cap what you spawn.** Every background process gets `--max-ai-credits`.
-  Parallel subagents multiply model calls by design.
+- **Write interfaces down before parallel work starts.** Verbatim. Across
+  repositories, also say what each side resolves the contract *from* - a package
+  version, a generated client, a spec file. "Both sides agree" is not a mechanism.
+- **Fan out only on disjoint file sets** within a repository. Ordering between
+  slices is declared with `dependsOn` and runs as waves, never assumed.
+- **Integration is a stage, not a `git merge`** - and across repositories it is
+  not a merge at all, it is `@rollout`.
+- **Send `@explore` for volume, `@impact-scout` across repositories.**
+- **Cap what you spawn.** Every background session gets `--max-ai-credits`.
 
 ## Verification
 
-`.github/copilot/verify-cmd` holds one shell line that proves the project still
-works. It runs after every code edit, and again when a subagent tries to finish.
-Failures come back into the transcript.
+Every registered repository has one shell line that proves it still works. It
+runs after every code edit and again when a subagent tries to finish. A
+repository with no registry entry runs unverified, on purpose.
 
-If it is not wired up, wire it up before writing code. Work that cannot be
-checked cannot be delegated, and mostly should not be trusted either.
+This repository's own check:
 
-One thing to know before relying on any of this: the CLI defers repository hooks
-until the folder is trusted. Interactive sessions ask once; `copilot -p` runs
-skip the hooks silently unless `GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS=true` is
-set. The scripts in `scripts/` set it for every session they start.
+```
+node scripts/check.mjs
+```
+
+It must pass before anything here is called done. It builds throwaway
+repositories and a throwaway `COPILOT_HOME`; it never touches the real config,
+and neither should any test you add.
 
 ## Communicating
 
@@ -137,15 +148,18 @@ line does.
 
 ---
 
-## Project-specific
+## This project, specifically
 
-*Replaced by the `adopt` skill with facts from the real codebase. Until then,
-this section is empty on purpose - a template full of plausible-sounding
-conventions that are not true here is worse than nothing, because agents believe
-it.*
-
-- **What this system is:** _(three sentences)_
-- **Run it:** _(command)_
-- **Test it:** _(command, same as `.github/copilot/verify-cmd`)_
-- **Layering rule:** _(the constraint that must not be violated)_
-- **Never change without a human:** _(what, and why)_
+- **What it is:** a set of `.agent.md` roles, `SKILL.md` workflows, Node hooks
+  and Node orchestration scripts, installed into `~/.copilot` and driven from a
+  checkout. No runtime, no build, no dependencies.
+- **Run it:** `node scripts/install.mjs`, then `node scripts/repos.mjs list`.
+- **Test it:** `node scripts/check.mjs` - and it runs on Linux and Windows in CI,
+  because the shell and path assumptions differ and that is where they break.
+- **Layering rule:** `hooks/lib/config.mjs` is the only place that decides where
+  a fact about a repository comes from. Hooks and scripts ask it; nothing else
+  reads the registry or guesses a path.
+- **preToolUse fails closed:** a hook that throws denies every tool call. Every
+  hook entry point exits 0 unconditionally and decides only through stdout.
+- **Never change without a human:** the delivery default (`local`), the
+  machine-wide protected paths, and anything that makes a guard fail open.

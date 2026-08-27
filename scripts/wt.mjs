@@ -1,29 +1,65 @@
 #!/usr/bin/env node
-// Worktree helper for parallel agent work.
+// Worktree helper for parallel agent work, across any registered repository.
 //
 // Parallel agents need isolated checkouts or they fight over the working tree.
 // Copilot CLI subagents do not get one - a fleet shares the tree and HEAD - so
 // anything that needs its own branch, its own commits, or its own test run gets
 // a worktree from here.
 //
-//   node scripts/wt.mjs new feat/checkout   create ../<repo>-wt/feat-checkout
-//   node scripts/wt.mjs ls                  list worktrees and their branches
-//   node scripts/wt.mjs rm  feat/checkout   remove it (refuses if dirty)
-//   node scripts/wt.mjs gc                  drop worktrees whose branch is merged
+// Worktrees live under ~/.copilot/copilot-base/worktrees/<repo>/<branch>, never
+// beside your checkouts, so nothing appears in or next to a work repository.
+//
+//   node scripts/wt.mjs new feat/checkout [--repo orders-api]
+//   node scripts/wt.mjs ls  [--repo orders-api]
+//   node scripts/wt.mjs rm  feat/checkout [--repo orders-api]
+//   node scripts/wt.mjs gc  [--repo orders-api]
+//
+// Without --repo, the repository containing the current directory is used.
 
 import { join } from 'node:path';
-import { die, ensureDir, git, log, repoRoot, slug, tryGit, worktreeDir } from './lib/shared.mjs';
+import { registry, worktreeRoot } from '../hooks/lib/config.mjs';
+import { die, ensureDir, git, log, slug, tryGit } from './lib/shared.mjs';
 
-const [command, argument] = process.argv.slice(2);
-const root = repoRoot();
-const wtRoot = worktreeDir(root);
+const args = process.argv.slice(2);
+const flags = {};
+const positional = [];
+for (let i = 0; i < args.length; i++) {
+  if (args[i].startsWith('--')) {
+    const [key, inline] = args[i].slice(2).split('=');
+    flags[key] = inline ?? (args[i + 1]?.startsWith('--') ? true : args[++i] ?? true);
+  } else {
+    positional.push(args[i]);
+  }
+}
+
+const [command, branchArg] = positional;
+
+function target() {
+  if (flags.repo) {
+    const entry = registry().find((r) => r.name === String(flags.repo));
+    if (entry) return { root: entry.path, label: entry.name };
+    if (tryGit(['rev-parse', '--git-dir'], String(flags.repo))) {
+      return { root: String(flags.repo), label: slug(String(flags.repo).split(/[\\/]/).pop()) };
+    }
+    die(`no registered repository named '${flags.repo}' (node scripts/repos.mjs list)`);
+  }
+  const root = tryGit(['rev-parse', '--show-toplevel'], process.cwd());
+  if (!root) die('not in a git repository, and no --repo given');
+  const entry = registry().find(
+    (r) => r.path.replace(/\\/g, '/').toLowerCase() === root.replace(/\\/g, '/').toLowerCase()
+  );
+  return { root, label: entry?.name ?? root.split(/[\\/]/).pop() };
+}
+
+const { root, label } = target();
+const wtRoot = join(worktreeRoot(), slug(label));
 
 export function pathFor(branch) {
   return join(wtRoot, slug(branch));
 }
 
 function create(branch) {
-  if (!branch) die('usage: node scripts/wt.mjs new <branch>');
+  if (!branch) die('usage: node scripts/wt.mjs new <branch> [--repo <name>]');
   const path = pathFor(branch);
   if (tryGit(['rev-parse', '--git-dir'], path)) die(`already exists: ${path}`);
 
@@ -38,7 +74,7 @@ function create(branch) {
 }
 
 function remove(branch) {
-  if (!branch) die('usage: node scripts/wt.mjs rm <branch>');
+  if (!branch) die('usage: node scripts/wt.mjs rm <branch> [--repo <name>]');
   const path = pathFor(branch);
   const status = tryGit(['status', '--porcelain'], path);
   if (status === null) die(`no worktree at ${path}`);
@@ -48,6 +84,7 @@ function remove(branch) {
 }
 
 function list() {
+  log(`${label} (${root})`);
   log(git(['worktree', 'list'], root));
 }
 
@@ -80,18 +117,18 @@ function gc() {
 
 switch (command) {
   case 'new':
-    create(argument);
+    create(branchArg);
     break;
   case 'ls':
     list();
     break;
   case 'rm':
-    remove(argument);
+    remove(branchArg);
     break;
   case 'gc':
     gc();
     break;
   default:
-    log('usage: node scripts/wt.mjs <new|ls|rm|gc> [branch]');
+    log('usage: node scripts/wt.mjs <new|ls|rm|gc> [branch] [--repo <name>]');
     process.exit(command ? 1 : 0);
 }

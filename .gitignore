@@ -15,7 +15,8 @@ venv/
 Thumbs.db
 *.log
 
-# orchestration state and per-slice artifacts
-.fanout/
-.fleet/
+# Orchestration state lives under ~/.copilot/copilot-base/, not in a repository.
+# These two only appear if a session is run with --share into the working
+# directory, or by a stray older run.
 copilot-session-*.md
+slices.json

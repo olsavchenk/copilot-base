@@ -44,12 +44,12 @@ its own model. It receives a brief, works, and returns a report; its transcript
 never enters the caller's context. Reached with `@name`, `/agent`, `--agent`, or
 the `task` tool. This is the atom.
 
-**Custom agent.** A `*.agent.md` role definition in `.github/agents/`. This is how
+**Custom agent.** A `*.agent.md` role definition, installed to `~/.copilot/agents/` so it is available in every repository. This is how
 a topology stops being something you re-explain every time. The `tools:` field is
 load-bearing: a read-only role that *cannot* write is a stronger guarantee than a
 role that has been asked not to.
 
-**Skill.** A `SKILL.md` procedure in `.github/skills/`, loaded into the **main**
+**Skill.** A `SKILL.md` procedure, installed to `~/.copilot/skills/` and loaded into the **main**
 agent's context. Workflows live here because orchestration has to happen in the
 session that can spawn subagents.
 
@@ -200,9 +200,39 @@ also multiplies model calls, so it multiplies credits.
 
 **Fails when** the slices were not actually disjoint. The four preconditions are
 non-negotiable: disjoint file sets, interfaces written down before anyone starts,
-no ordering dependency, a runnable check per slice. Fail any one and sequential
-would have been faster. `scripts/fanout.mjs` refuses to start if it can see the
-failure.
+declared ordering rather than assumed ordering, a runnable check per slice. Fail
+any one and sequential would have been faster. `scripts/fanout.mjs` refuses to
+start if it can see the failure.
+
+### 3.5b Fan-out across repositories
+
+The same shape, with the seams moved to repository boundaries: one change, N
+services, one branch each.
+
+```
+impact-scout ──▶ contract ──▶ wave 1: provider ──▶ wave 2: consumers ──▶ rollout
+```
+
+Three things change, and each of them is a new way to fail:
+
+**The interface is not a type any more, it is a published thing.** Two slices in
+one repository can share a type because the compiler sees both. Two repositories
+cannot. The contract has to be written once and *resolved from* something real -
+a package version, a generated client, a spec file. "Both sides agree" is not a
+mechanism.
+
+**Ordering is real.** The provider must be green before consumers build against
+it, so the slices form waves rather than one flat batch. This costs wall-clock
+time by construction; it is the price of not discovering at merge time that the
+contract moved.
+
+**There is no union to verify.** Nothing merges these into one branch, so the
+integrator has nothing to run. What replaces it is a rollout: the order held, the
+consumers verified against the provider, and delivery per the configured mode.
+
+**Fails when** the consumer list was wrong. This is the dominant failure and it
+happens before any agent runs - which is why `@impact-scout` comes first and why
+"repositories affected but not registered" is the line of its report that matters.
 
 ### 3.6 Supervisor tree
 
@@ -282,7 +312,7 @@ concurrent contexts do not fit in one agent. Two levels, no more.
 
 **5-10 workers per project, generalist or specialist by need.** The choice is made
 per problem, not by policy. A specialist role is worth defining when you will use
-it repeatedly. → `.github/agents/` is where the repeatable ones live.
+it repeatedly. → `agents/` is where the repeatable ones live.
 
 **2-3 days of autonomy per worker.** This number reveals what kind of work is
 being delegated: something specifiable once, needing no clarification, with a
@@ -439,6 +469,10 @@ integration is done by something that has to hold all the pieces at once.
 | **Ambiguity amplification** | Five agents, five interpretations | Specify once, centrally, before fan-out |
 | **Runaway cost** | A fan-out nobody capped | `--max-ai-credits` on every spawned session |
 | **Fleet maintenance** | You spend the day managing agents | Watch the prompts-per-day metric; if it rises, roll back |
+| **Missed consumer** | The change ships; a service nobody listed breaks in production | `@impact-scout` before planning, across repositories and local clones |
+| **Cross-repo contract drift** | Each repository has its own copy of "the" type, and they diverge | Name what each side resolves the contract from, not just what it says |
+| **Partial rollout** | Three repositories moved, two did not; the seam is broken | Waves, plus a rollout that keeps the order and stops on red |
+| **Silent unguarded session** | Work happens in a repository with no check and nobody notices | The session brief says "not registered" out loud |
 
 ---
 
@@ -447,17 +481,22 @@ integration is done by something that has to hold all the pieces at once.
 | Concept | Where |
 |---|---|
 | Scout pattern | built-in `@explore` and `@task`; the base deliberately ships no replacement |
-| Adversarial pair | `.github/agents/critic.agent.md` on plans; built-in `@code-review` and `@security-review` on diffs |
-| Pipeline | `.github/skills/plan` then `fanout` then `harden` |
-| Fan-out with a real gate | `.github/skills/fanout/SKILL.md` and the gate inside `scripts/fanout.mjs` |
+| Cross-repository recon | `agents/impact-scout.agent.md` |
+| Adversarial pair | `agents/critic.agent.md` on plans; built-in `@code-review` and `@security-review` on diffs |
+| Pipeline | `skills/plan` then `fanout` then `harden` |
+| Fan-out with a real gate | `skills/fanout/SKILL.md` and the gate inside `scripts/fanout.mjs` |
+| Dependency waves | `waves()` in `scripts/fanout.mjs` |
 | Worktree isolation | `scripts/fanout.mjs`, `scripts/wt.mjs` |
-| Integration as a first-class stage | `.github/agents/integrator.agent.md` |
-| Supervisor tree / peer mesh | `scripts/fleet.mjs`, `.github/skills/fleet/SKILL.md` |
-| Verification enforcement | `.github/hooks/verify-after-edit.mjs`, `guard-subagent-done.mjs`, `.github/copilot/verify-cmd` |
-| Protected surfaces | `.github/hooks/guard-protected-paths.mjs`, `.github/copilot/protected-paths` |
-| No direct commits to integration branches | `.github/hooks/guard-main-branch.mjs` |
-| Session and delegation grounding | `.github/hooks/session-brief.mjs`, `subagent-brief.mjs` |
-| Written conventions | `AGENTS.md`, adopted per project via `.github/skills/adopt` |
+| Integration as a first-class stage | `agents/integrator.agent.md` (one repo), `agents/rollout.agent.md` (several) |
+| Multi-repo runbook | `skills/multi-repo/SKILL.md` |
+| Supervisor tree / peer mesh | `scripts/fleet.mjs`, `skills/fleet/SKILL.md` |
+| Verification enforcement | `hooks/verify-after-edit.mjs`, `hooks/guard-subagent-done.mjs`, the registry's per-repo check |
+| Protected surfaces | `hooks/guard-protected-paths.mjs`, `config/protected-paths` + registry entries |
+| No direct commits to integration branches | `hooks/guard-main-branch.mjs` |
+| Session and delegation grounding | `hooks/session-brief.mjs`, `hooks/subagent-brief.mjs` |
+| Where per-repo facts live | `~/.copilot/copilot-base/repos.json`, read only by `hooks/lib/config.mjs` |
+| Delivery as configuration | `deliveryFor()` in `hooks/lib/config.mjs`; `@rollout` obeys it |
+| Written conventions | `AGENTS.md`, and the `workspace` skill for machine setup |
 | Least privilege per role | `tools:` in the agent frontmatter; `--deny-tool` in the orchestration scripts |
 
 ---
@@ -467,10 +506,10 @@ integration is done by something that has to hold all the pieces at once.
 Do not start at the top. Each stage has an entry condition, and skipping stages
 produces the elaborate-but-useless setup this document exists to prevent.
 
-**Stage 0 - solo, with hooks.** One agent. Verification wired, protected paths
-set, `AGENTS.md` written from the real codebase. *Entry: you have a project.*
-This stage alone eliminates the most common class of error, and most projects
-should stop here for a while.
+**Stage 0 - solo, with hooks.** One agent. The toolkit installed, your
+repositories registered, each with a check that is green today. *Entry: you have
+a project.* This stage alone eliminates the most common class of error, and most
+people should stop here for a while.
 
 **Stage 1 - scouts and critics.** Delegate volume reading to `@explore`; run
 `@critic` or `@rubber-duck` on plans before implementing. *Entry: your sessions
@@ -483,17 +522,25 @@ with clean contexts. *Entry: work regularly spans more than one sitting.*
 need their own branches. *Entry: you have level 2+ verification and three or more
 genuinely independent slices.*
 
-**Stage 4 - supervisor tree.** A lead tier absorbing routine decisions. *Entry:
+**Stage 4 - multi-repo.** One change landing across several services: impact
+scout, a contract written once, waves, rollout. *Entry: every affected repository
+is registered with a check that passes, and you can name the consumers. Without
+both, this stage produces a half-finished change spread over five repositories.*
+
+**Stage 5 - supervisor tree.** A lead tier absorbing routine decisions. *Entry:
 more concurrent workstreams than you can brief directly.*
 
-**Stage 5 - fleet with supervision.** Long-running members, addressed by name,
+**Stage 6 - fleet with supervision.** Long-running members, addressed by name,
 restarted by a watchdog. *Entry: agents running unattended for days, and level 4+
 verification.*
 
-Most solo builders and small teams live productively at stages 0-2, reach for 3
-occasionally, and never need 4 or 5. The value of knowing about the top of the
-ladder is recognising the moment you actually arrive there - and recognising that
-the shape you copy has preconditions attached.
+Most solo builders and small teams live productively at stages 0-2 and reach for
+3 occasionally. Stage 4 is where a team with several services actually lives, and
+it is worth noticing that its entry condition is bookkeeping - a registry and
+green checks - rather than anything clever. Stages 5 and 6 are rarer than they
+look. The value of knowing about the top of the ladder is recognising the moment
+you actually arrive there, and recognising that the shape you copy has
+preconditions attached.
 
 ---
 

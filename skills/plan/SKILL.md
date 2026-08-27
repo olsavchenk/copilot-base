@@ -16,6 +16,11 @@ agents with specific questions. Do not send one to "look around" - give each a
 question that has an answer. Explore runs on a cheap model in its own context
 and is safe to call in parallel; that is exactly what recon should cost.
 
+If the change touches something other repositories consume - an endpoint, a
+published type, a schema, a queue - send `@impact-scout` as well. Explore is
+scoped to this working directory; the scout crosses repository boundaries. Plan
+from its table, because the consumer nobody remembered is what makes a plan wrong.
+
 **2. Draft the plan.** Delegate to `@tech-lead` with: the request, what explore
 found, and any constraint the human stated. Ask for the full plan format -
 slices with owned file sets, interfaces written out verbatim, a runnable "done
@@ -34,14 +39,15 @@ rework verdict by editing around the edges.
 
 **5. Present.** Give the human:
 
-- the slices as a table: name, files, interface, depends on, done when
+- the slices as a table: name, repo, files, interface, depends on, done when
 - what runs in parallel and what is strictly ordered
+- for multi-repo work: the rollout order and the delivery mode it assumes
 - the critic's surviving concerns, if any
 - the single riskiest assumption, and the cheapest way to test it early
 
 If the plan will be fanned out, also write `slices.json` in the shape
-`scripts/fanout.mjs` expects, so the next step is one command rather than a
-translation exercise.
+`scripts/fanout.mjs` expects - including `repo` and `dependsOn` per slice - so
+the next step is one command rather than a translation exercise.
 
 Then stop. Do not start implementing. Planning and building in one turn is how
 plans get quietly abandoned halfway through.

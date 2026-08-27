@@ -1,11 +1,14 @@
 // preToolUse: refuse edits to files that must not change without a human.
 //
-// The matcher in copilot-base.json has already narrowed this to write-shaped
+// The matcher in the hook config has already narrowed this to write-shaped
 // tools, so the work here is finding which path each one touches - the argument
 // name differs per tool, and apply_patch does not use an argument at all.
+//
+// The patterns are the union of the machine-wide list, the registry entry for
+// this repository, and any file the repository carries itself, so a global rule
+// applies everywhere including repositories nobody registered.
 
 import {
-  configLines,
   deny,
   pass,
   readPayload,
@@ -15,6 +18,7 @@ import {
   run,
   toolArgs,
 } from './lib/hook-io.mjs';
+import { protectedPatternsFor } from './lib/config.mjs';
 
 const PATH_ARGS = [
   'path',
@@ -56,7 +60,7 @@ run(async () => {
   const cwd = payload.cwd || process.cwd();
   const root = repoRoot(cwd);
 
-  const patterns = configLines(root, 'protected-paths');
+  const patterns = protectedPatternsFor(root);
   if (patterns.length === 0) pass();
 
   for (const target of targets(toolArgs(payload))) {
@@ -64,9 +68,10 @@ run(async () => {
     const pattern = matchesAny(rel, patterns);
     if (pattern) {
       deny(
-        `${rel} matches "${pattern}" in .github/copilot/protected-paths. ` +
-          'Changing it needs an explicit human decision: say what should change ' +
-          'and why, and ask before editing.'
+        `${rel} matches the protected pattern "${pattern}". Changing it needs an ` +
+          'explicit human decision: say what should change and why, and ask ' +
+          'before editing. (Protected paths come from the copilot-base config ' +
+          'and this repository\'s registry entry.)'
       );
     }
   }

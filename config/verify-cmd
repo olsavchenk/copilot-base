@@ -1,0 +1,14 @@
+# A fallback check, used only for a repository with no registry entry of its own.
+#
+# It is empty on purpose, and should usually stay that way: one command cannot be
+# right for every repository on this machine. The check that runs in a repository
+# comes from its registry entry:
+#
+#   node scripts/repos.mjs scan <dir> --add     propose one per repository
+#   node scripts/repos.mjs set <name> verify "npm run typecheck && npm test"
+#   node scripts/repos.mjs check                run them all once, now
+#
+# A repository with no entry and no line here runs unverified: the post-edit
+# hook stays silent, and a subagent is not blocked from reporting done. That is
+# deliberate - a machine-wide install must not run some other project's test
+# suite in a repository you only opened to read.

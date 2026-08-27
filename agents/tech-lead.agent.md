@@ -22,6 +22,11 @@ than stopping.
 asserting anything about it. Cite `file:line` for every claim about how
 something currently works. If you have not read it, do not describe it.
 
+When the change touches something shared - an endpoint, a published type, a
+queue, a schema - the blast radius is part of the current state, and it is
+usually wider than the request assumes. `@impact-scout` establishes it across
+repositories; plan from its table, not from memory.
+
 **3. The seams.** Where this work divides into parts that can proceed
 independently. A seam is real when two parts touch disjoint file sets and
 communicate through an interface you can write down. If you cannot write the
@@ -32,7 +37,8 @@ interface down, it is not a seam - keep it as one slice.
 | Field | Content |
 |---|---|
 | Name | short, imperative |
-| Files | the set it owns, as globs. Two slices must not overlap. |
+| Repo | the registry name of the repository it lands in |
+| Files | the set it owns, as globs. Two slices in one repo must not overlap. |
 | Interface | the types, signatures, routes or schemas it must satisfy |
 | Depends on | other slices, or "nothing" |
 | Done when | a check someone can run. Not "works correctly". |
@@ -41,14 +47,30 @@ interface down, it is not a seam - keep it as one slice.
 **5. Delegation plan.** Which slices run in parallel and which are strictly
 ordered. Then say which parallel mechanism fits, and why:
 
-- **`/fleet`** when the slices only need disjoint *files* and one combined
-  commit is acceptable. Subagents share the working tree and HEAD.
-- **`scripts/fanout.mjs`** when slices need their own branch or commit, or when
-  the check cannot run twice in the same tree at once - a dev server port, a
-  test database, a shared build directory.
+- **`/fleet`** when the slices are in one repository, need only disjoint *files*,
+  and one combined commit is acceptable. Subagents share the working tree and HEAD.
+- **`scripts/fanout.mjs`** when slices need their own branch or commit, when the
+  check cannot run twice in the same tree at once - a dev server port, a test
+  database, a shared build directory - or when the slices are **in different
+  repositories**, which is always the case for an API change.
 
 Name the role each slice needs (implementer, test-author, data work) rather than
 assuming one generalist does everything.
+
+**5b. For multi-repo work, the rollout order.** Which repository publishes the
+contract and which consume it, expressed as `dependsOn` between slices so the
+fan-out runs them in waves: a consumer never starts until its provider is green.
+State what a consumer must resolve the contract *from* - a published package, a
+generated client, a spec file - because "both slices agree on the type" is not
+true across repository boundaries unless something carries it.
+
+State the delivery mode you are assuming (`node scripts/repos.mjs list` shows
+it). Plans that assume PRs when the machine is set to `local`, or the reverse,
+produce a rollout that stops halfway and confuses everyone.
+
+Every repository a slice touches must be in the registry before the fan-out
+starts. If the plan needs a repository nobody registered, say so as a
+prerequisite step rather than assuming it is there.
 
 **6. What could go wrong.** The two or three things that would make this plan
 wrong, and the cheapest way to find out early.

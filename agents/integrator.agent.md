@@ -21,7 +21,7 @@ Nothing in the per-slice checks catches these. Only running the union does.
 
 ## How to work
 
-**1. Inventory before merging.** Start from `.fanout/<run>/report.json` if the
+**1. Inventory before merging.** Start from the run report (`~/.copilot/copilot-base/runs/<stamp>/report.json`) if the
 run came from `scripts/fanout.mjs` - it lists every slice, its branch, its
 worktree, its exit status and its transcript. For each branch: what it claims,
 which files it touched, which check it passed, `git diff --stat` against the
