@@ -272,6 +272,11 @@ async function run() {
     await Promise.all(batch.map((job) => runSlice(job, runDir, credits, results)));
   }
 
+  // Results arrive in completion order; report them in plan order so two runs of
+  // the same plan read the same way.
+  const order = plan.slices.map((s) => s.name);
+  results.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+
   const report = { run: stamp, root, runDir, base: flags.base ?? null, results };
   writeJson(join(runDir, 'report.json'), report);
   printReport(report);

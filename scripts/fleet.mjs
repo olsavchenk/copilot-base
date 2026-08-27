@@ -95,7 +95,7 @@ function incident(text) {
 
 // ---------------------------------------------------------------- start
 
-function briefFor(name, dir) {
+function briefFor(dir) {
   if (flags.brief) {
     const path = resolve(root, String(flags.brief));
     if (existsSync(path)) return path;
@@ -109,7 +109,7 @@ function briefFor(name, dir) {
   die(`start needs --brief <file> or --prompt "<text>"`);
 }
 
-function workdirFor(name) {
+function workdirFor() {
   const branch = flags.worktree ? String(flags.worktree) : null;
   if (!branch) return { cwd: root, branch: tryGit(['symbolic-ref', '--short', 'HEAD'], root) };
 
@@ -165,8 +165,8 @@ function start() {
   }
 
   const dir = ensureDir(memberDir(name));
-  const brief = briefFor(name, dir);
-  const { cwd, branch } = workdirFor(name);
+  const brief = briefFor(dir);
+  const { cwd, branch } = workdirFor();
   const sessionId = randomUUID();
   const agent = flags.agent ? String(flags.agent) : 'implementer';
 
