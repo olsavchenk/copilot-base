@@ -1,0 +1,16 @@
+# Globs an agent may not edit without a human decision (repo-relative, glob).
+# One per line. The preToolUse guard denies the edit and explains why.
+#
+# The CLI can enforce a second, coarser layer on the same idea without a hook:
+#   copilot --deny-tool='write(.env)' --deny-tool='write(migrations)'
+# The hook is here because it gives the agent a reason it can act on.
+.env
+.env.*
+**/secrets.*
+.github/copilot/protected-paths
+.github/hooks/**
+.github/workflows/**
+infra/**
+**/infra/**
+migrations/**
+**/migrations/**

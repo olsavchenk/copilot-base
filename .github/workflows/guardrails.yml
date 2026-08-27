@@ -1,0 +1,51 @@
+name: guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: guardrails behave as documented
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The hooks and orchestration scripts are cross-platform by claim, so the
+      # claim gets tested on both. Windows is where the shell assumptions break.
+      - name: Guardrails and structure
+        run: node scripts/check.mjs
+
+      - name: Fan-out gate rejects a bad plan
+        shell: bash
+        run: |
+          cat > /tmp/overlapping.json <<'JSON'
+          {"slices":[
+            {"name":"a","files":["src/api/**"],"brief":"one"},
+            {"name":"b","files":["src/api/routes/**"],"brief":"two"}
+          ]}
+          JSON
+          if node scripts/fanout.mjs run /tmp/overlapping.json; then
+            echo "gate accepted overlapping slices"; exit 1
+          fi
+
+      - name: Fan-out dry run produces briefs
+        shell: bash
+        run: |
+          cat > /tmp/slices.json <<'JSON'
+          {"slices":[
+            {"name":"a","files":["src/a/**"],"brief":"one","doneWhen":"exit 0"},
+            {"name":"b","files":["src/b/**"],"brief":"two"}
+          ]}
+          JSON
+          node scripts/fanout.mjs run /tmp/slices.json --dry-run
+          test -f "$(find .fanout -name BRIEF.md | head -1)"

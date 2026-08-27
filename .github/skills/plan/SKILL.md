@@ -1,0 +1,57 @@
+---
+name: plan
+description: Turn a feature request into a reviewed delegation plan - the tech-lead agent drafts slices with interfaces and runnable checks, the critic attacks them, and you present a plan that survived contact. Use before writing code on anything spanning more than one file or one session.
+---
+
+# Plan
+
+Produce a delegation plan for the request, reviewed before anyone writes code.
+This is the cheapest place to fix a design, so spend here.
+
+## Steps
+
+**1. Ground yourself first.** Read `AGENTS.md` and skim the directory structure.
+If the request touches an area you have not read, send one or two `@explore`
+agents with specific questions. Do not send one to "look around" - give each a
+question that has an answer. Explore runs on a cheap model in its own context
+and is safe to call in parallel; that is exactly what recon should cost.
+
+**2. Draft the plan.** Delegate to `@tech-lead` with: the request, what explore
+found, and any constraint the human stated. Ask for the full plan format -
+slices with owned file sets, interfaces written out verbatim, a runnable "done
+when" per slice, and the parallel-versus-sequential call including *which*
+parallel mechanism.
+
+**3. Attack it.** Pass that plan to `@critic`. The critic reviews the plan, not
+the request - it decides whether these are the right slices, whether the seams
+are real, whether the parallel mechanism matches the slices, and whether
+anything load-bearing was assumed rather than read.
+
+**4. Reconcile.** Apply the critic's findings yourself. Where you disagree with a
+finding, say why in one sentence rather than silently dropping it. If the
+verdict is "rework", go back to step 2 with its findings - do not paper over a
+rework verdict by editing around the edges.
+
+**5. Present.** Give the human:
+
+- the slices as a table: name, files, interface, depends on, done when
+- what runs in parallel and what is strictly ordered
+- the critic's surviving concerns, if any
+- the single riskiest assumption, and the cheapest way to test it early
+
+If the plan will be fanned out, also write `slices.json` in the shape
+`scripts/fanout.mjs` expects, so the next step is one command rather than a
+translation exercise.
+
+Then stop. Do not start implementing. Planning and building in one turn is how
+plans get quietly abandoned halfway through.
+
+## Rules
+
+- No plan for code nobody read. Every claim about existing behaviour needs a
+  `file:line` behind it.
+- If the work turns out to be one slice, say so and say it does not need a plan.
+  A one-slice answer is a good outcome, not a failed workflow.
+- If the request is ambiguous in a way that changes the design, ask the human
+  before drafting. Ambiguity that only changes wording, decide yourself and note
+  the assumption.

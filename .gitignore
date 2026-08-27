@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+out/
+.next/
+target/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.log
+
+# orchestration state and per-slice artifacts
+.fanout/
+.fleet/
+copilot-session-*.md
