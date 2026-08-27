@@ -17,6 +17,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -90,6 +91,30 @@ function setVerify(dir, line) {
   writeFileSync(join(dir, '.github', 'copilot', 'verify-cmd'), `# fixture\n${line}\n`);
 }
 
+/**
+ * A second, equally valid spelling of the same directory, or the input if the
+ * platform will not give us one. A junction on Windows (no elevation needed,
+ * unlike a symlink) and a symlink everywhere else.
+ */
+function aliasFor(dir) {
+  const link = join(tmpdir(), `copilot-base-alias-${process.pid}`);
+  try {
+    rmSync(link, { recursive: true, force: true });
+    if (process.platform === 'win32') {
+      spawnSync('cmd', ['/c', 'mklink', '/J', link, dir], { stdio: 'ignore' });
+    } else {
+      symlinkSync(dir, link, 'dir');
+    }
+    if (!existsSync(link)) return dir;
+    aliases.push(link);
+    return link;
+  } catch {
+    return dir;
+  }
+}
+
+const aliases = [];
+
 // ------------------------------------------------------------------ hooks
 
 const { dir: repo, run: gitIn } = makeRepo();
@@ -135,6 +160,20 @@ try {
     decision(
       hook('guard-protected-paths.mjs', { cwd: repo, toolName: 'create', toolArgs: { path: 'packages/api/.env' } })
     )?.permissionDecision === 'deny'
+  );
+
+  // The payload cwd and git's toplevel do not always spell the same directory
+  // the same way: Windows hands out 8.3 short names in TEMP, and a symlinked
+  // checkout has two valid names. If the guard cannot see through that, every
+  // directory glob stops matching and it fails open without saying so.
+  const alias = aliasFor(repo);
+  check(
+    'denies through an equivalent but differently spelled cwd',
+    alias === repo ||
+      decision(
+        hook('guard-protected-paths.mjs', { cwd: alias, toolName: 'edit', toolArgs: { path: 'infra/main.tf' } })
+      )?.permissionDecision === 'deny',
+    alias === repo ? 'no alias available on this platform' : `alias: ${alias}`
   );
 
   section('integration branches');
@@ -232,6 +271,7 @@ try {
   rmSync(repo, { recursive: true, force: true });
   const siblings = join(dirname(repo), `${repo.split(/[\\/]/).pop()}-wt`);
   rmSync(siblings, { recursive: true, force: true });
+  for (const link of aliases) rmSync(link, { force: true });
 }
 
 // ------------------------------------------------------------------ structure
@@ -304,7 +344,9 @@ for (const [dir, pattern, label] of [
   for (const file of walk(dir).filter((f) => pattern.test(f))) {
     const text = readFileSync(file, 'utf8');
     const name = file.slice(ROOT.length + 1);
-    check(`${label} ${name} starts with frontmatter`, text.startsWith('---\n'));
+    // Tolerate CRLF: a Windows checkout without .gitattributes produces it, and
+    // the frontmatter is still valid.
+    check(`${label} ${name} starts with frontmatter`, /^---\r?\n/.test(text));
     check(`${label} ${name} has a description`, /^description:/m.test(text.split('---')[1] ?? ''));
   }
 }

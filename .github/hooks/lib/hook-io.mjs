@@ -12,8 +12,8 @@
 //      happening.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { readFileSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 const SEPARATOR = String.fromCharCode(92); // a literal backslash
 const ESCAPE_THESE = '.+^${}()|[]' + SEPARATOR;
@@ -126,10 +126,35 @@ export function configLines(root, name) {
   }
 }
 
+/**
+ * The real path of a directory, or the input if it cannot be resolved.
+ *
+ * This matters more than it looks. Windows hands out 8.3 short names
+ * (RUNNER~1) in TEMP while git reports the long name, and a mismatch makes
+ * `relative()` return a path that climbs out of the repository. Every
+ * directory glob then stops matching - silently, which turns the guard into
+ * decoration rather than an error.
+ */
+function canonicalDir(path) {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
+/** Same, for a file that may not exist yet: canonicalise the directory only. */
+function canonicalFile(path) {
+  const dir = dirname(path);
+  const real = canonicalDir(dir);
+  return real === dir ? path : join(real, basename(path));
+}
+
 /** Repo-relative, forward-slashed, so the globs stay portable. */
 export function relativeToRoot(root, path, cwd) {
-  const absolute = isAbsolute(path) ? path : resolve(cwd || root, path);
-  return relative(root, absolute).split(SEPARATOR).join('/');
+  const base = canonicalDir(cwd || root);
+  const absolute = canonicalFile(isAbsolute(path) ? path : resolve(base, path));
+  return relative(canonicalDir(root), absolute).split(SEPARATOR).join('/');
 }
 
 /**
