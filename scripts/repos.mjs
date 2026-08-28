@@ -13,8 +13,7 @@
 // one is how you opt it in.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import {
   baseHome,
   deliveryFor,
@@ -22,6 +21,10 @@ import {
   registryPath,
   settings,
 } from '../hooks/lib/config.mjs';
+// Discovery and check inference live beside the hooks, because a session brief
+// needs them too. One implementation, so a repository is described the same way
+// whether you registered it by hand or a session found it.
+import { findRepos, proposeVerify } from '../hooks/lib/discover.mjs';
 import { die, log, readJson, tryGit, writeJson } from './lib/shared.mjs';
 
 const [command, ...rest] = process.argv.slice(2);
@@ -49,64 +52,6 @@ function normalise(path) {
   return resolve(path).split('\\').join('/');
 }
 
-/**
- * Propose a verification command from what the project actually declares.
- * Proposes - never silently adopts. A wrong check is worse than no check: it
- * fails on work that is fine, and everyone learns to ignore the hook.
- */
-function proposeVerify(path) {
-  const pkgPath = join(path, 'package.json');
-  if (existsSync(pkgPath)) {
-    const scripts = readJson(pkgPath, {}).scripts ?? {};
-    const runner = existsSync(join(path, 'pnpm-lock.yaml'))
-      ? 'pnpm'
-      : existsSync(join(path, 'yarn.lock'))
-        ? 'yarn'
-        : 'npm';
-    const run = (name) => (runner === 'npm' ? `npm run ${name}` : `${runner} ${name}`);
-    const parts = [];
-    if (scripts.typecheck) parts.push(run('typecheck'));
-    else if (scripts.build) parts.push(run('build'));
-    if (scripts.test) parts.push(runner === 'npm' ? 'npm test' : `${runner} test`);
-    if (parts.length) return parts.join(' && ');
-  }
-  if (existsSync(join(path, 'pyproject.toml')) || existsSync(join(path, 'setup.cfg'))) return 'pytest -q';
-  if (existsSync(join(path, 'go.mod'))) return 'go build ./... && go test ./...';
-  if (existsSync(join(path, 'Cargo.toml'))) return 'cargo check --quiet';
-  if (readdirSync(path).some((f) => f.endsWith('.csproj') || f.endsWith('.sln'))) {
-    return 'dotnet build --nologo -v q';
-  }
-  return null;
-}
-
-function findRepos(root, depth) {
-  const found = [];
-  const visit = (dir, level) => {
-    if (level > depth) return;
-    let entries;
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      return;
-    }
-    if (entries.includes('.git')) {
-      found.push(dir);
-      return; // do not descend into a repository
-    }
-    for (const entry of entries) {
-      if (entry.startsWith('.') || entry === 'node_modules') continue;
-      const path = join(dir, entry);
-      try {
-        if (statSync(path).isDirectory()) visit(path, level + 1);
-      } catch {
-        // unreadable directory; skip
-      }
-    }
-  };
-  visit(resolve(root), 0);
-  return found;
-}
-
 // ------------------------------------------------------------------ commands
 
 function scan() {
@@ -114,7 +59,7 @@ function scan() {
   if (!root) die('usage: node scripts/repos.mjs scan <dir> [--depth 3] [--add]');
 
   const depth = Number(flags.depth ?? 3);
-  const found = findRepos(root, depth);
+  const found = findRepos(root, { depth, limit: 200 });
   if (!found.length) die(`no git repositories under ${root} within ${depth} levels`);
 
   const data = load();
@@ -190,8 +135,15 @@ function list() {
   for (const r of repos) {
     log(
       `${pad(r.name, 20)} ${pad(deliveryFor(r.path), 9)} ${pad(r.role ?? '-', 10)} ` +
-        `${r.verify ?? '(none)'}`
+        `${r.verify ?? '(none)'}${r.auto ? '   [guessed]' : ''}`
     );
+  }
+
+  if (repos.some((r) => r.auto)) {
+    log('');
+    log('[guessed] - inferred from the project when a session opened this workspace,');
+    log('not confirmed by anyone. Run it, and correct what is wrong:');
+    log('  node scripts/repos.mjs set <name> verify "<command>"');
   }
 }
 

@@ -11,14 +11,14 @@ and the check that decides it is finished. Theory is in
 
 **Topology:** none yet.
 
-Ask for the `route` skill. It reads down one table, stops at the first row that
-fits, checks that row's precondition, and hands off - naming the shape and the
-reason in one line. It is the front door for anyone who has not memorised the
-rest of this file.
+Say what you want. The `crew` skill triggers on the request itself, reads down
+one sizing table, stops at the first row that fits, and then carries the work out
+- it does not hand you back to another workflow. It is the front door for anyone
+who has not memorised the rest of this file.
 
 The one answer it gives that is not a runbook below: if nobody can say what
-"done" means, it sends `@spec-writer` and stops. Route no further until that
-comes back.
+"done" means, it sends `@spec-writer` and stops. Go no further until that comes
+back.
 
 ---
 

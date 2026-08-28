@@ -484,7 +484,7 @@ integration is done by something that has to hold all the pieces at once.
 | Scout pattern | built-in `@explore` and `@task`; the base deliberately ships no replacement |
 | Cross-repository recon | `agents/impact-scout.agent.md` |
 | Shaping an unspecified ask | `agents/spec-writer.agent.md`, gated at step 0 of `skills/plan` |
-| Choosing the shallowest topology | `skills/route/SKILL.md` |
+| Choosing the shallowest topology | the sizing table in `skills/crew/SKILL.md` |
 | Adversarial pair | `agents/critic.agent.md` on plans; built-in `@code-review` and `@security-review` on diffs |
 | Pipeline | `skills/plan` then `fanout` then `harden` |
 | Fan-out with a real gate | `skills/fanout/SKILL.md` and the gate inside `scripts/fanout.mjs` |
@@ -500,6 +500,8 @@ integration is done by something that has to hold all the pieces at once.
 | Where per-repo facts live | `~/.copilot/copilot-base/repos.json`, read only by `hooks/lib/config.mjs` |
 | Delivery as configuration | `deliveryFor()` in `hooks/lib/config.mjs`; `@rollout` obeys it |
 | Written conventions | `AGENTS.md`, and the `workspace` skill for machine setup |
+| Facts that outlive a session | `MEMORY.md` at the workspace root, `agents/memory-keeper.agent.md`, injected by `hooks/session-brief.mjs` |
+| Zero-setup verification | `proposeVerify()` and `rememberRepos()` in `hooks/lib/discover.mjs` |
 | Least privilege per role | `tools:` in the agent frontmatter; `--deny-tool` in the orchestration scripts |
 | Anti-gaming of the check | non-negotiable 4 in `AGENTS.md`, restated in `implementer` and `test-author` |
 

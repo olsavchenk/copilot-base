@@ -27,7 +27,7 @@ that agent runs into four walls, and they are the same four every time:
 | **One change, five services** | The provider ships, a consumer nobody listed breaks in production | Cross-repository impact search, a contract written once, dependency waves, an ordered rollout |
 
 If none of those is hurting yet, you do not need most of this. Install it anyway
-for the guardrails, register your repositories, and stop there - that is
+for the guardrails and stop there - that is
 [stage 0](docs/multi-agent-playbook.md#10-the-adoption-ladder), and most people
 should sit on it for a while.
 
@@ -47,10 +47,14 @@ This one is load-bearing: people run this against repositories they do not own.
 
 **The hooks run in every repository you open**, including one you just cloned to
 read. That is deliberate - user-level hooks are the only kind Copilot CLI fires
-without folder trust ([the evidence](docs/copilot-cli-capabilities.md)) - so an
-unregistered repository gets the machine-wide protected paths and **nothing
-else**. In particular no check runs there. Opting a repository in is a deliberate
-act, and it is what makes a global install safe.
+without folder trust ([the evidence](docs/copilot-cli-capabilities.md)).
+
+**It records a check for the projects it finds, and that is the one thing worth
+understanding.** When a session starts, the repositories at or below that folder
+are registered with a check read from what each project declares. It writes a
+command; it never runs one. Your project's code is executed only by the post-edit
+check - so a repository you open to read, and do not edit, runs nothing. Turn it
+off with `"autoRegister": false` and nothing is written at all.
 
 **Nothing is pushed by default.** Delivery mode starts at `local`: branches and
 commits only. Pull requests are something you turn on, not something you
@@ -89,27 +93,67 @@ That copies the agents to `~/.copilot/agents`, the skills to `~/.copilot/skills`
 the hooks to `~/.copilot/copilot-base/hooks`, and registers them at
 `~/.copilot/hooks/copilot-base.json`.
 
-Then tell it which repositories you work in:
+**That is the whole setup.** No registration step, no config file to fill in.
+
+### Then just work
+
+Open a terminal in the folder that holds your projects - the folder, not one of
+the repositories:
 
 ```bash
-node scripts/repos.mjs scan ~/work --add
+copilot
 ```
+
+The session starts knowing what is there: every checkout under that folder, what
+each one is, what proves each one works, and anything `MEMORY.md` records about
+them. Then say what you want, in plain English:
+
+```
+implement user story ABS-312
+```
+
+That triggers the `crew` skill, which works out which repository the story
+belongs in, sizes the work, delegates it or does it directly, runs the check, and
+reports back on a branch. You do not invoke agents one at a time.
+
+Copilot CLI has no custom slash commands - the namespace is fixed - so there is
+no `/crew` to type. You do not need one; the skill triggers on the request
+itself. To start a run *without* opening a session:
 
 ```bash
-node scripts/repos.mjs check
+node scripts/crew.mjs "implement user story ABS-312"
 ```
 
-`scan` proposes a check per repository from what the project declares -
-`package.json` scripts, `pyproject.toml`, `go.mod`, `Cargo.toml`, a `.csproj`.
-It proposes; you approve. Drop `--add` first if you want to read the proposals
-before anything is registered. Fix any it got wrong:
+### Checks, without a setup step
+
+A session that opens a workspace infers each project's check from what the
+project itself declares - a `package.json` script, a `go.mod`, a `Cargo.toml` -
+and registers it so the post-edit hook has something to run. Inferred checks are
+marked `[guessed]` in `node scripts/repos.mjs list` and announced as unconfirmed
+in the session brief, because a guess is a guess.
+
+Correct one the moment it is wrong, and it stays corrected - a hand-set check is
+never overwritten:
 
 ```bash
 node scripts/repos.mjs set orders-api verify "npm run typecheck && npm test"
 ```
 
-**Do not skip `repos.mjs check`.** A check that is already red teaches everyone -
-you included - to ignore the hook that runs it.
+A project that declares nothing runnable gets no check, and the brief says so out
+loud rather than inventing one. To turn inference off entirely, put
+`"autoRegister": false` in `~/.copilot/copilot-base/config.json` and register by
+hand with `node scripts/repos.mjs add <path> --verify "<command>"`.
+
+### Memory
+
+Put a `MEMORY.md` in the workspace folder, beside your checkouts. Every session
+started at or below it loads it verbatim - it is the only thing here that carries
+a fact from one session to the next.
+
+It is for what an agent cannot work out by reading the code: which repository
+actually owns a surface, what a ticket prefix means and where to read one, a
+check that passes while testing nothing, why something was deliberately not done.
+`@memory-keeper` writes and prunes it; you can also just edit it yourself.
 
 ### Confirm it took
 
@@ -142,6 +186,7 @@ scripts/
   install.mjs    install, update, uninstall
   repos.mjs      the repository registry
   check.mjs      proves the guardrails behave as documented
+  crew.mjs       start a crew run from the shell, no session needed
   fanout.mjs     parallel slices across repos, in dependency waves
   fleet.mjs      named, resumable, supervised sessions
   wt.mjs         git worktree helper
@@ -170,6 +215,7 @@ Invoked with `@name`, in any repository, once installed.
 | `@impact-scout` | Find every consumer of an API across repositories, before you change it. |
 | `@rollout` | Sequence a change across repositories and deliver it. |
 | `@docs-writer` | Keep AGENTS.md, READMEs and ADRs true. |
+| `@memory-keeper` | Maintain the workspace `MEMORY.md` - what a future session cannot re-derive. |
 
 Deliberately absent, because the CLI ships them: `@explore`, `@task`,
 `@code-review`, `@security-review`, `@rubber-duck`.
@@ -181,8 +227,8 @@ one by name ("use the multi-repo skill").
 
 | Skill | What it runs |
 |---|---|
-| `route` | Classify the work, pick the shallowest structure that fits, hand off. Start here if unsure. |
-| `workspace` | install/update, register repositories, set delivery mode |
+| `crew` | **The default entry point.** One request to finished, verified work: find the repo, size it, delegate, verify, report. |
+| `workspace` | install/update, correct a check, set delivery mode |
 | `plan` | tech-lead drafts slices, critic attacks them, you get a reviewed plan |
 | `multi-repo` | impact scout, contract written once, waves, rollout |
 | `fanout` | the gate, then parallel slices in isolated worktrees |
@@ -264,8 +310,8 @@ The ladder is in
 [docs/multi-agent-playbook.md](docs/multi-agent-playbook.md#10-the-adoption-ladder);
 the short version:
 
-1. **Install, register your repos, set their checks.** Highest return, lowest
-   ceremony. Sit here for a while.
+1. **Install, then just work.** Correct the inferred checks as you meet them.
+   Highest return, lowest ceremony. Sit here for a while.
 2. **`@explore`, `@critic`, `@impact-scout`.** When context fills up, or when you
    are about to change something other services consume.
 3. **`plan` then `harden`.** When work spans more than one sitting.

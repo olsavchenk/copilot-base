@@ -30,6 +30,9 @@ repository on the machine. Per-repository facts live in a registry at
    this on repositories they do not own.
 3. **Never report work complete on a failing check.** For subagents this is
    enforced: the `subagentStop` hook blocks a completion while the check is red.
+   A check may have been *inferred* rather than registered; an inferred check
+   that has never been run is not evidence, so run it once before leaning on it
+   and say what it did.
 4. **Never make a check pass by weakening it.** No deleted assertions, no added
    skips, no loosened tolerances, no narrowed inputs, no `--no-verify`. Rule 3 is
    the pressure that produces a gamed test - it makes red block your completion,
@@ -71,6 +74,7 @@ before building anything that sounds like infrastructure.
 | Guardrails | `hooks/*.mjs` + `hooks/copilot-base.hooks.json` | `~/.copilot/copilot-base/hooks/` + `~/.copilot/hooks/copilot-base.json` |
 | Machine defaults | `config/protected-paths`, `config/verify-cmd` | `~/.copilot/copilot-base/config/` |
 | Registry and settings | - | `~/.copilot/copilot-base/repos.json`, `config.json` |
+| Workspace memory | - | `MEMORY.md` beside the checkouts, injected by `session-brief` |
 | Orchestration | `scripts/*.mjs` | run from this checkout |
 
 Workflows are skills and roles are agents, deliberately. A skill loads into the
@@ -86,7 +90,7 @@ never from "the current repository", which is usually somebody else's.
 | Shape | Approach |
 |---|---|
 | Nobody can say what "done" is | `@spec-writer` first, then stop for a human. |
-| You cannot tell which row this is | `route` skill - it classifies and hands off. |
+| You cannot tell which row this is | `crew` skill - it classifies, then carries it out. |
 | One file, one sitting | Do it. No plan, no delegation. |
 | Several files, one concern | Do it, sending `@explore` first if you need to locate things. |
 | Multiple concerns, one session | `plan` skill, then implement in order. |
@@ -165,7 +169,10 @@ line does.
   because the shell and path assumptions differ and that is where they break.
 - **Layering rule:** `hooks/lib/config.mjs` is the only place that decides where
   a fact about a repository comes from. Hooks and scripts ask it; nothing else
-  reads the registry or guesses a path.
+  reads the registry or guesses a path. `hooks/lib/discover.mjs` is the only
+  place that *guesses* one - finding checkouts and inferring a check - so a
+  repository is described the same way whether you registered it or a session
+  found it.
 - **preToolUse fails closed:** a hook that throws denies every tool call. Every
   hook entry point exits 0 unconditionally and decides only through stdout.
 - **Never change without a human:** the delivery default (`local`), the

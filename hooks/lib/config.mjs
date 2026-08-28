@@ -15,7 +15,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, parse, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalDir, fileLines, git, repoConfigLines } from './hook-io.mjs';
 
@@ -153,6 +153,59 @@ export function deliveryFor(root, override) {
   return (
     valid(override) ?? valid(repoEntry(root)?.delivery) ?? valid(settings().delivery) ?? 'local'
   );
+}
+
+/**
+ * The folder a session was started in, treated as the workspace: the thing that
+ * holds several checkouts. When the session started inside a repository, the
+ * workspace is that repository's parent, which is where a memory file covering
+ * sibling projects would sit.
+ */
+export function workspaceRoot(cwd, repoRootPath) {
+  const start = cwd ? resolve(cwd) : process.cwd();
+  if (!repoRootPath) return start;
+  return dirname(resolve(repoRootPath));
+}
+
+/**
+ * The nearest MEMORY.md at or above `from`, or null.
+ *
+ * Walking up rather than requiring an exact location is what lets one memory
+ * file serve every project under a workspace: the file sits beside the
+ * checkouts, and a session started inside any one of them still finds it.
+ * Stops at the filesystem root, and never at the home directory - a memory file
+ * is about a set of projects, not about a machine.
+ */
+export function memoryFile(from) {
+  let dir = resolve(from ?? process.cwd());
+  const stop = parse(dir).root;
+  const home = resolve(homedir());
+  for (let i = 0; i < 12; i++) {
+    const candidate = join(dir, 'MEMORY.md');
+    if (existsSync(candidate)) return candidate;
+    if (dir === stop || dir === home) break;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return null;
+}
+
+/**
+ * Whether a session may register the repositories it finds beneath its own
+ * working directory, with a check inferred from what each project declares.
+ *
+ * On by default: the alternative is that nothing is verified until someone
+ * runs a setup command, and an unverified agent is the failure this whole base
+ * exists to prevent. Registration records a command; it does not run one. Your
+ * code is executed by the post-edit check, which still only fires in a
+ * repository you opened and edited.
+ *
+ * Set `"autoRegister": false` in config.json to turn it off and go back to
+ * registering by hand.
+ */
+export function autoRegisterEnabled() {
+  return settings().autoRegister !== false;
 }
 
 export function worktreeRoot() {
