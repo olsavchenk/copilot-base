@@ -59,6 +59,14 @@ One coherent commit, or a small series where each one stands alone. The message
 says what changed and why - the diff already says how. Never commit on an
 integration branch; the guard hook will stop you anyway.
 
+Never commit a file that was already dirty when you arrived. Uncommitted changes
+in your file set are somebody else's work in flight, and once they are inside a
+commit attributed to you they cannot be separated out again. Stage only what you
+changed if you can isolate it; otherwise leave the file and report it under
+`NOT DONE` as modified-but-not-committed, with the reason. `git add <path>` is
+not protection - it stages the whole file, including whatever was there before
+you.
+
 ## Report back
 
 Use these sections. The last three exist because they are the ones a model

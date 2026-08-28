@@ -33,7 +33,7 @@ one is pure overhead.
 
 ## Choosing the mechanism
 
-Two ways to run this, and the choice is not stylistic:
+Three ways to run this, and the choice is not stylistic:
 
 **`/fleet`** - the CLI's own parallel subagents. Each gets its own context
 window; they **share this working tree and this HEAD**. Use it when the slices
@@ -48,8 +48,30 @@ Copilot session per slice. Use it when any of these is true:
 - you want per-slice transcripts and exit codes to audit afterwards
 - a slice may need to be thrown away without touching the others
 
-When in doubt, use the script. The failure it prevents - two agents running the
-same test suite in one tree - is silent and confusing.
+**Direct sequential work** - you do the slices yourself, one after another, in
+the repositories as they stand. For small, low-risk, independent slices, and
+documentation is the usual example, this is often the right answer: two of the
+three mechanisms exist to keep concurrent agents out of each other's way, and
+there are no concurrent agents here. It is a legitimate choice. What it is not
+is the place you end up by skipping the other two.
+
+When in doubt between the first two, use the script. The failure it prevents -
+two agents running the same test suite in one tree - is silent and confusing.
+
+**Say which of the three you picked, and why, before you start.** One line, in
+the run's output rather than in your head, because the choice decides where the
+edits land and what has to be cleaned up afterwards. When the answer is direct
+sequential work, say the consequence with it: the worktree isolation this skill
+otherwise gives you does not apply, and the edits land in the user's live
+checkouts. That sentence is the whole point of the rule. The failure it catches
+is a run that entered this skill, took the third option without saying so, and
+left everyone downstream believing the guarantees of the first two were in force.
+
+Working in live checkouts also changes what you may commit. Any repository the
+session brief reports with uncommitted work needs handling more carefully:
+**never commit a file whose changes you did not make.** The full rule is in
+`crew` step 4 - it is what stops a run from sweeping somebody's work in progress
+into a commit of its own, where the two can no longer be told apart.
 
 ## Running the script
 
@@ -134,6 +156,9 @@ pull requests).
 
 - Never fan out onto overlapping files in one repository. This is the rule that
   makes the rest work.
+- Name the mechanism before you start, and never take the third one silently.
+  Direct sequential work is allowed; letting the reader assume worktree isolation
+  was in force is not.
 - Never merge without running the full check on the union.
 - Never start a later wave when an earlier one is red.
 - If a slice reports a collision, stop and re-slice. Do not tell it to proceed

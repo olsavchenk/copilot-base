@@ -117,8 +117,20 @@ If a nested skill produced a plan, show it, then implement it. Do not present a
 plan as the answer to a request that asked for work to be done - a plan the user
 has to hand back to you is half a turn, and this skill exists to close it.
 
-**Branch first, always.** `guard-main-branch` will stop you on `main`, `master`,
+**Branch first, always - but branch the repository you are about to edit, at the
+moment you edit it.** `guard-main-branch` will stop you on `main`, `master`,
 `develop` or `release/*`, and it is right to. Name the branch after the work.
+What "first" does not mean is branching the whole set up front, while you are
+still surveying, before you know which repositories the work actually touches. A
+survey is read-only and needs no branch.
+
+**If you branched a repository and then did not change it, put it back.** Return
+it to the branch it was on and delete the branch you made. An empty branch left
+checked out in someone's repository is a change to their workspace that they did
+not ask for and will not notice until it confuses them - or until it quietly
+becomes the base of their next piece of work. Never leave a repository on a
+different branch than you found it, unless that branch holds commits you made and
+reported.
 
 **Delegating?** Every brief stands alone - the agent cannot see this
 conversation. It gets: the goal, the repository and its path, the file set it
@@ -143,6 +155,17 @@ worth resisting the urge to skip.
   skips, no loosened tolerances, no `--no-verify`. If it cannot pass honestly,
   report it failing with the reason.
 - **Check it stayed in scope.** Send unrequested refactors back.
+- **Never commit a change you did not make.** Before staging a file, check
+  whether it already had uncommitted changes when you arrived. If it did, those
+  are the user's work in flight and they are not yours to commit: once the two
+  are inside one commit attributed to your run, nobody can separate them again.
+  Say so and let the user decide - commit only what you changed if you can
+  isolate it, otherwise leave the file modified-but-not-committed and report it
+  that way with the reason. `git add <specific file>` is not protection here; the
+  file itself may already be dirty, and naming it stages everything in it,
+  including whatever was there before you arrived. The session brief reports an
+  uncommitted count per repository. Treat a nonzero count as a reason to look
+  before staging, not as a detail to note and move past.
 
 Re-delegate a failed piece at most twice, fixing the brief between attempts -
 most failures are underspecified scope, not a bad agent. After the second, stop
@@ -170,6 +193,20 @@ NOTICED, NOT TOUCHED
 NEEDS YOU
 <decisions, approvals, or open questions - or "nothing">
 ```
+
+**That block is the shape of the final message, not a suggestion.** Every
+heading appears every time, including the ones whose content is "nothing" - the
+headings are the only thing stopping a run from quietly omitting the parts that
+went badly. Freeform prose reports the run you would have liked to have had.
+`NOT DONE`, `UNVERIFIED` and `NEEDS YOU` are the three that get dropped when the
+report is written from memory, and they are the entire reason the format exists;
+an empty heading you have to answer is cheap, and a missing one is invisible.
+
+A run that touched several repositories reports **per repository** under `DONE` -
+one entry each, with its own paths and its own check result - so nine
+repositories cannot collapse into one sentence. Repositories you branched and
+then restored belong in the report too, under `NOT DONE` or `NOTICED, NOT
+TOUCHED`, with what you put them back to.
 
 Then stop. **Do not push and do not open a pull request** unless the delivery
 mode says so or the user asked - `local` is the default and it means branches and
