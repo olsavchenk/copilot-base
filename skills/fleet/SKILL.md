@@ -5,6 +5,9 @@ description: Run long-lived, named Copilot sessions that can be addressed, resum
 
 # Fleet
 
+> `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the
+> absolute path the session brief prints - these scripts are not on `PATH`.
+
 `scripts/fleet.mjs` runs work as **named sessions** rather than as processes you
 have to babysit. A session survives the process that started it, so a member can
 be addressed later by name: nudged, restarted, or asked what it did.
@@ -32,13 +35,13 @@ for a bounded parallel run, and come back to this later.
 ## Driving it
 
 ```
-node scripts/fleet.mjs start orders --repo orders-api --brief plans/orders.md --worktree feat/email --autopilot 20
-node scripts/fleet.mjs list
-node scripts/fleet.mjs status orders
-node scripts/fleet.mjs say orders "the User schema changed - rebase onto main and adjust"
-node scripts/fleet.mjs restart orders
-node scripts/fleet.mjs stop orders
-node scripts/fleet.mjs watch --interval 120 --max-restarts 3
+node <base>/scripts/fleet.mjs start orders --repo orders-api --brief plans/orders.md --worktree feat/email --autopilot 20
+node <base>/scripts/fleet.mjs list
+node <base>/scripts/fleet.mjs status orders
+node <base>/scripts/fleet.mjs say orders "the User schema changed - rebase onto main and adjust"
+node <base>/scripts/fleet.mjs restart orders
+node <base>/scripts/fleet.mjs stop orders
+node <base>/scripts/fleet.mjs watch --interval 120 --max-restarts 3
 ```
 
 - **start** puts the member in a repository (`--repo <registry name or path>`,

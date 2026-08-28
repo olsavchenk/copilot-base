@@ -10,7 +10,7 @@
 // first thing it needs to be sure of.
 
 import { addContext, currentBranch, readPayload, repoRoot, run } from './lib/hook-io.mjs';
-import { protectedPatternsFor, repoEntry } from './lib/config.mjs';
+import { protectedPatternsFor, repoEntry, scriptsRoot } from './lib/config.mjs';
 import { verifyCommand } from './lib/verify.mjs';
 
 run(async () => {
@@ -37,6 +37,13 @@ run(async () => {
       '- Run it before you finish and quote its output verbatim in your report. A stop on a red check will be refused.'
     );
   }
+
+  // impact-scout, tech-lead and rollout are all told to read the registry. They
+  // start in a work repository, where a relative `node scripts/...` resolves to
+  // nothing, so they get the absolute path rather than a guess.
+  lines.push(
+    `- copilot-base scripts live at ${scriptsRoot().replace(/\\/g, '/')} - that is what \`<base>/scripts\` means, and they are not on PATH.`
+  );
 
   const protectedPaths = protectedPatternsFor(root);
   if (protectedPaths.length) {

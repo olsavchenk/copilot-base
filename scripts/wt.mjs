@@ -18,7 +18,7 @@
 
 import { join } from 'node:path';
 import { registry, worktreeRoot } from '../hooks/lib/config.mjs';
-import { die, ensureDir, git, log, slug, tryGit } from './lib/shared.mjs';
+import { die, ensureDir, git, invoke, log, slug, tryGit } from './lib/shared.mjs';
 
 const args = process.argv.slice(2);
 const flags = {};
@@ -41,7 +41,7 @@ function target() {
     if (tryGit(['rev-parse', '--git-dir'], String(flags.repo))) {
       return { root: String(flags.repo), label: slug(String(flags.repo).split(/[\\/]/).pop()) };
     }
-    die(`no registered repository named '${flags.repo}' (node scripts/repos.mjs list)`);
+    die(`no registered repository named '${flags.repo}' (${invoke('repos.mjs')} list)`);
   }
   const root = tryGit(['rev-parse', '--show-toplevel'], process.cwd());
   if (!root) die('not in a git repository, and no --repo given');
@@ -59,7 +59,7 @@ export function pathFor(branch) {
 }
 
 function create(branch) {
-  if (!branch) die('usage: node scripts/wt.mjs new <branch> [--repo <name>]');
+  if (!branch) die(`usage: ${invoke('wt.mjs')} new <branch> [--repo <name>]`);
   const path = pathFor(branch);
   if (tryGit(['rev-parse', '--git-dir'], path)) die(`already exists: ${path}`);
 
@@ -74,7 +74,7 @@ function create(branch) {
 }
 
 function remove(branch) {
-  if (!branch) die('usage: node scripts/wt.mjs rm <branch> [--repo <name>]');
+  if (!branch) die(`usage: ${invoke('wt.mjs')} rm <branch> [--repo <name>]`);
   const path = pathFor(branch);
   const status = tryGit(['status', '--porcelain'], path);
   if (status === null) die(`no worktree at ${path}`);
@@ -129,6 +129,6 @@ switch (command) {
     gc();
     break;
   default:
-    log('usage: node scripts/wt.mjs <new|ls|rm|gc> [branch] [--repo <name>]');
+    log(`usage: ${invoke('wt.mjs')} <new|ls|rm|gc> [branch] [--repo <name>]`);
     process.exit(command ? 1 : 0);
 }

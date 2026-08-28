@@ -13,14 +13,30 @@ branches and commits.
 
 ## Install or update
 
+Run these two from the checkout - installing is the one thing you do from here:
+
 ```
 node scripts/install.mjs --dry-run     # see exactly what would be written
 node scripts/install.mjs               # install or update
 ```
 
 That copies the agents to `~/.copilot/agents`, the skills to `~/.copilot/skills`,
-the hook scripts to `~/.copilot/copilot-base/hooks`, and registers the hooks at
+the hook scripts to `~/.copilot/copilot-base/hooks`, the commands to
+`~/.copilot/copilot-base/scripts`, and registers the hooks at
 `~/.copilot/hooks/copilot-base.json` with absolute paths.
+
+## What `<base>` means
+
+Every skill writes runtime commands as `node <base>/scripts/repos.mjs ...`.
+`<base>` is `~/.copilot/copilot-base` - the installed copy. **Substitute the real
+absolute path**: the scripts are not on `PATH`, and a relative `node
+scripts/repos.mjs` resolves only inside this checkout, which is every directory
+except the one you actually work in. The session brief prints the exact path at
+the top of every session, so you should not have to look it up.
+
+The commands are installed beside the hooks rather than anywhere tidier because
+they import `../hooks/lib/config.mjs`; the installed layout has to mirror the
+checkout.
 
 User-level hooks fire in every repository with no folder trust and no opt-in
 variable, which is why the guardrails are installed here rather than copied into
@@ -38,9 +54,9 @@ node scripts/check.mjs      # the guardrails, against a throwaway repo
 ## Register the repositories you work across
 
 ```
-node scripts/repos.mjs scan D:/work          # look, propose a check per repo
-node scripts/repos.mjs scan D:/work --add    # then register them
-node scripts/repos.mjs list
+node <base>/scripts/repos.mjs scan D:/work          # look, propose a check per repo
+node <base>/scripts/repos.mjs scan D:/work --add    # then register them
+node <base>/scripts/repos.mjs list
 ```
 
 Registration is what opts a repository in. Until then it gets the machine-wide
@@ -53,14 +69,14 @@ you poke around in someone else's code.
 adopt. Read them, then fix any that are wrong:
 
 ```
-node scripts/repos.mjs set orders-api verify "npm run typecheck && npm test"
-node scripts/repos.mjs set orders-api role provider
+node <base>/scripts/repos.mjs set orders-api verify "npm run typecheck && npm test"
+node <base>/scripts/repos.mjs set orders-api role provider
 ```
 
 Then prove they are green **before** an agent depends on them:
 
 ```
-node scripts/repos.mjs check
+node <base>/scripts/repos.mjs check
 ```
 
 A check that is already red teaches everyone to ignore the hook. Fix it now,
@@ -76,8 +92,8 @@ How finished work leaves the machine:
 | `pr` | Branches are pushed and one PR per repository is opened, in dependency order, cross-linked. |
 
 ```
-node scripts/repos.mjs list                        # shows the effective mode
-node scripts/repos.mjs set orders-api delivery pr  # one repository
+node <base>/scripts/repos.mjs list                        # shows the effective mode
+node <base>/scripts/repos.mjs set orders-api delivery pr  # one repository
 ```
 
 The machine-wide default lives in `~/.copilot/copilot-base/config.json`. A repo

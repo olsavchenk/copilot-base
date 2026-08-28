@@ -100,6 +100,8 @@ if (flags.has('--uninstall')) {
     join(COPILOT_HOME, 'agents'),
     join(BASE_HOME, 'hooks', 'lib'),
     join(BASE_HOME, 'hooks'),
+    join(BASE_HOME, 'scripts', 'lib'),
+    join(BASE_HOME, 'scripts'),
     join(BASE_HOME, 'config'),
   ]) {
     try {
@@ -129,6 +131,15 @@ if (flags.has('--uninstall')) {
 copyTree(join(PACKAGE, 'agents'), join(COPILOT_HOME, 'agents'), (p) => p.endsWith('.agent.md'));
 copyTree(join(PACKAGE, 'skills'), join(COPILOT_HOME, 'skills'));
 copyTree(join(PACKAGE, 'hooks'), join(BASE_HOME, 'hooks'), (p) => p.endsWith('.mjs'));
+
+// The scripts have to be installed too, and beside the hooks rather than
+// anywhere else: `repos.mjs`, `fanout.mjs`, `fleet.mjs` and `wt.mjs` all import
+// `../hooks/lib/config.mjs`, so the installed layout has to mirror the checkout.
+//
+// Without this the skills are installed machine-wide while the commands they
+// tell you to run only resolve inside the clone - which is every directory
+// except the one you actually work in.
+copyTree(join(PACKAGE, 'scripts'), join(BASE_HOME, 'scripts'), (p) => p.endsWith('.mjs'));
 
 // Shipped defaults are copied once and then left alone - they are yours to edit.
 copyIfMissing(join(PACKAGE, 'config', 'protected-paths'), join(BASE_HOME, 'config', 'protected-paths'));
@@ -180,8 +191,12 @@ say('');
 say('The session brief lists what is there and infers a check per project; the');
 say('crew skill takes the request from there. Two things worth knowing:');
 say('');
-say('  node scripts/repos.mjs list           checks marked [guessed] are inferred');
+say(`  node ${join(BASE_HOME, 'scripts', 'repos.mjs').split('\\').join('/')} list`);
+say('      - checks marked [guessed] are inferred, not confirmed');
 say('  MEMORY.md in that folder             loaded into every session, verbatim');
+say('');
+say('That scripts path is what every skill means by <base>/scripts. The session');
+say('brief prints it, so you rarely have to type it.');
 say('');
 say('Delivery defaults to "local": branches and commits, nothing pushed.');
 say('Switch a repo or the machine to "pr" when you want pull requests opened.');

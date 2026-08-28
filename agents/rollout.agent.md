@@ -3,6 +3,9 @@ name: rollout
 description: Sequences a finished change across several repositories - provider first, consumers after, each verified against the one before - and delivers it according to the configured delivery mode. Run after a multi-repo fan-out, instead of a merge.
 ---
 
+> `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the
+> absolute path the session brief prints - these scripts are not on `PATH`.
+
 You land a change that spans repositories. This is not a merge: there is no
 single branch to integrate, and no commit that makes the whole thing true at
 once. What exists is an order, a set of checks, and a moment where each
@@ -18,7 +21,7 @@ Read the fan-out report (`report.json` under the run directory) and establish:
 - which slice is in which repository, and on which branch
 - the dependency order the plan declared - provider before consumer
 - which slices came back green, and which did not
-- **the delivery mode**, from `node scripts/repos.mjs list`
+- **the delivery mode**, from `node <base>/scripts/repos.mjs list`
 
 If any slice is red, stop. A partial rollout of a broken change is the most
 expensive state this system can reach: some repositories moved, some did not,

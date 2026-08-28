@@ -35,12 +35,13 @@ import {
   delegatedEnv,
   die,
   ensureDir,
+  git,
+  invoke,
   log,
   readJson,
   slug,
   tryGit,
   writeJson,
-  git,
 } from './lib/shared.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -70,7 +71,7 @@ function saveState(next) {
 
 function member(name) {
   const found = state().members[name];
-  if (!found) die(`no fleet member named '${name}' - run: node scripts/fleet.mjs list`);
+  if (!found) die(`no fleet member named '${name}' - run: ${invoke('fleet.mjs')} list`);
   return found;
 }
 
@@ -116,7 +117,7 @@ function repoFor() {
     if (entry) return { root: entry.path, label: entry.name };
     const path = resolve(String(flags.repo));
     if (tryGit(['rev-parse', '--git-dir'], path)) return { root: path, label: slug(String(flags.repo)) };
-    die(`no registered repository named '${flags.repo}' (node scripts/repos.mjs list)`);
+    die(`no registered repository named '${flags.repo}' (${invoke('repos.mjs')} list)`);
   }
   const here = tryGit(['rev-parse', '--show-toplevel'], process.cwd());
   if (!here) die('not in a git repository, and no --repo given');
@@ -180,7 +181,7 @@ function launch({ name, dir, cwd, sessionId, prompt, agent, resume }) {
 
 function start() {
   const name = positional[0];
-  if (!name) die('usage: node scripts/fleet.mjs start <name> --brief <file> [--worktree <branch>]');
+  if (!name) die(`usage: ${invoke('fleet.mjs')} start <name> --brief <file> [--worktree <branch>]`);
 
   const current = state();
   if (current.members[name] && alive(current.members[name].pid)) {
@@ -284,7 +285,7 @@ function status() {
 function say() {
   const [name, ...words] = positional;
   const message = words.join(' ');
-  if (!name || !message) die('usage: node scripts/fleet.mjs say <name> "<message>"');
+  if (!name || !message) die(`usage: ${invoke('fleet.mjs')} say <name> "<message>"`);
 
   const m = describe(member(name));
   if (m.running && !flags.force) {
@@ -308,7 +309,7 @@ function say() {
 }
 
 function restart(name = positional[0], reason = 'manual restart') {
-  if (!name) die('usage: node scripts/fleet.mjs restart <name>');
+  if (!name) die(`usage: ${invoke('fleet.mjs')} restart <name>`);
   const current = state();
   const m = current.members[name];
   if (!m) die(`no fleet member named '${name}'`);
@@ -338,7 +339,7 @@ function restart(name = positional[0], reason = 'manual restart') {
 
 function stop() {
   const name = positional[0];
-  if (!name) die('usage: node scripts/fleet.mjs stop <name>');
+  if (!name) die(`usage: ${invoke('fleet.mjs')} stop <name>`);
   const current = state();
   const m = current.members[name];
   if (!m) die(`no fleet member named '${name}'`);
@@ -439,6 +440,6 @@ switch (command) {
     await watch();
     break;
   default:
-    log('usage: node scripts/fleet.mjs <start|list|status|say|restart|stop|watch> [args]');
+    log(`usage: ${invoke('fleet.mjs')} <start|list|status|say|restart|stop|watch> [args]`);
     process.exit(command ? 1 : 0);
 }

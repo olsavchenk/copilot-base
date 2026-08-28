@@ -23,6 +23,7 @@ import {
   memoryFile,
   registry,
   repoEntry,
+  scriptsRoot,
   workspaceRoot,
 } from './lib/config.mjs';
 import { describeProject, findRepos, proposeVerify, rememberRepos } from './lib/discover.mjs';
@@ -36,6 +37,7 @@ run(async () => {
   const branch = root ? safe(() => currentBranch(root)) : null;
 
   const lines = branch ? repositoryBrief(root, branch) : workspaceBrief(cwd);
+  lines.push('', toolingBlock());
   const memory = memoryBlock(workspaceRoot(cwd, branch ? root : null));
   if (memory) lines.push('', memory);
 
@@ -149,6 +151,29 @@ function repositoryBrief(root, branch) {
   }
 
   return lines;
+}
+
+// -------------------------------------------------------------------- tooling
+
+/**
+ * The absolute path behind every `<base>/scripts/...` command the skills print.
+ *
+ * This is here because the skills are installed machine-wide but the scripts
+ * are not on any path: a session that reads `node <base>/scripts/repos.mjs` and
+ * has to guess `<base>` will guess wrong, run the command from the wrong
+ * directory, and conclude the registry is empty. Stating it once, in the one
+ * block every session already reads, is cheaper than every skill re-explaining
+ * it.
+ */
+function toolingBlock() {
+  const scripts = scriptsRoot().replace(/\\/g, '/');
+  return [
+    `copilot-base scripts: ${scripts}`,
+    'Where a skill writes `<base>/scripts/...`, that is the path it means. Run them',
+    'with that absolute path from wherever you are - they are not on PATH, and a',
+    'relative `node scripts/...` resolves only inside the copilot-base checkout.',
+    `  node ${scripts}/repos.mjs list      what is registered, and how work is delivered`,
+  ].join('\n');
 }
 
 // --------------------------------------------------------------------- memory

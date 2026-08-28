@@ -10,6 +10,21 @@ import { dirname, join } from 'node:path';
 
 export const IS_WINDOWS = process.platform === 'win32';
 
+/**
+ * How to invoke a sibling command, spelled the way the caller can actually
+ * retype it.
+ *
+ * These scripts are installed under `~/.copilot/copilot-base/scripts` and are
+ * not on `PATH`, so a usage line reading `node scripts/repos.mjs` is a command
+ * that fails everywhere except this project's own checkout. Deriving the
+ * directory from `process.argv[1]` means the hint always names the copy that is
+ * actually running, installed or checked out.
+ */
+export function invoke(script, args = '') {
+  const dir = dirname(process.argv[1] ?? '.').split('\\').join('/');
+  return `node ${dir}/${script}${args ? ' ' + args : ''}`;
+}
+
 export function git(args, cwd = process.cwd()) {
   return execFileSync('git', ['-C', cwd, ...args], {
     encoding: 'utf8',
