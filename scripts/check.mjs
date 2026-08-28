@@ -30,6 +30,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
 const HOOKS = join(ROOT, 'hooks');
 
+const SEP = String.fromCharCode(92); // a literal backslash
 const probeId = `probe-${process.pid}-${Date.now()}`;
 let failures = 0;
 let checks = 0;
@@ -56,13 +57,21 @@ const FAKE_HOME = mkdtempSync(join(tmpdir(), 'copilot-base-home-'));
 process.env.COPILOT_HOME = FAKE_HOME;
 
 /** Run a hook with a payload on stdin and return its stdout. */
-function hook(script, payload) {
+function hook(script, payload, home = FAKE_HOME) {
   const result = spawnSync(process.execPath, [join(HOOKS, script)], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
-    env: { ...process.env, COPILOT_HOME: FAKE_HOME },
+    env: { ...process.env, COPILOT_HOME: home },
   });
   return (result.stdout ?? '').trim();
+}
+
+function readJsonOrNull(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 function decision(output) {
@@ -314,6 +323,96 @@ try {
   check('subagent brief names the repository it is in', subagent?.additionalContext?.includes('registered-fixture') === true);
   check('subagent brief carries the file-set rule', subagent?.additionalContext?.includes('Stay inside the file set') === true);
   check('subagent brief lists the protected paths', subagent?.additionalContext?.includes('src/generated/**') === true);
+
+  section('workspace mode and memory');
+
+  // A folder holding several checkouts and not being one itself. This is the
+  // zero-setup entry point: nothing here has been registered by hand.
+  const workspace = mkdtempSync(join(tmpdir(), 'copilot-base-workspace-'));
+  const wsHome = mkdtempSync(join(tmpdir(), 'copilot-base-wshome-'));
+
+  function repoIn(parent, name, files) {
+    const dir = join(parent, name);
+    mkdirSync(dir, { recursive: true });
+    const run = (args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' });
+    run(['init', '-b', 'main']);
+    run(['config', 'user.email', 'check@example.invalid']);
+    run(['config', 'user.name', 'check']);
+    for (const [file, body] of Object.entries(files)) {
+      writeFileSync(join(dir, file), body);
+    }
+    run(['add', '-A']);
+    run(['commit', '-m', 'fixture']);
+    return dir;
+  }
+
+  const declaring = repoIn(workspace, 'declaring-api', {
+    'package.json': JSON.stringify({ name: 'declaring-api', scripts: { typecheck: 'tsc', test: 'vitest' } }),
+    'index.ts': 'export const ok = true;\n',
+  });
+  repoIn(workspace, 'silent-lib', { 'README.md': 'no build system here\n' });
+
+  const wsBrief = decision(hook('session-brief.mjs', { cwd: workspace, source: 'startup' }, wsHome));
+  const wsText = wsBrief?.additionalContext ?? '';
+
+  check('a workspace folder still produces a brief', wsText.length > 0);
+  check('the brief names every checkout it found', wsText.includes('declaring-api') && wsText.includes('silent-lib'));
+  check('the brief infers a check from what the project declares', wsText.includes('npm run typecheck'));
+  check('an inferred check is labelled as unconfirmed', wsText.includes('inferred from the project'));
+  check('the brief says which projects cannot be verified', wsText.includes('silent-lib') && wsText.includes('No check could be inferred'));
+  check('the brief warns against working at the workspace level', wsText.includes('not a project'));
+
+  // Auto-registration: what makes the check exist without a setup step.
+  const autoRegistry = readJsonOrNull(join(wsHome, 'copilot-base', 'repos.json'));
+  const autoEntry = (autoRegistry?.repos ?? []).find((r) => r.name === 'declaring-api');
+  check('a discovered repository is registered automatically', Boolean(autoEntry));
+  check('the auto entry carries the inferred check', autoEntry?.verify === 'npm run typecheck && npm test');
+  check('an auto entry is marked as guessed', autoEntry?.auto === true);
+  check(
+    'a project declaring nothing runnable is not registered',
+    !(autoRegistry?.repos ?? []).some((r) => r.name === 'silent-lib')
+  );
+
+  // A hand-registered entry must survive a session that rediscovers it.
+  const keepHome = mkdtempSync(join(tmpdir(), 'copilot-base-keephome-'));
+  mkdirSync(join(keepHome, 'copilot-base'), { recursive: true });
+  writeFileSync(
+    join(keepHome, 'copilot-base', 'repos.json'),
+    JSON.stringify(
+      { repos: [{ name: 'declaring-api', path: declaring.split(SEP).join('/'), verify: 'my own command' }] },
+      null,
+      2
+    )
+  );
+  hook('session-brief.mjs', { cwd: workspace, source: 'startup' }, keepHome);
+  const kept = readJsonOrNull(join(keepHome, 'copilot-base', 'repos.json'));
+  const keptEntry = (kept?.repos ?? []).filter((r) => r.name === 'declaring-api');
+  check('auto-registration never overwrites a hand-registered check', keptEntry.length === 1 && keptEntry[0].verify === 'my own command');
+
+  // The opt-out.
+  const offHome = mkdtempSync(join(tmpdir(), 'copilot-base-offhome-'));
+  mkdirSync(join(offHome, 'copilot-base'), { recursive: true });
+  writeFileSync(join(offHome, 'copilot-base', 'config.json'), JSON.stringify({ autoRegister: false }));
+  hook('session-brief.mjs', { cwd: workspace, source: 'startup' }, offHome);
+  const off = readJsonOrNull(join(offHome, 'copilot-base', 'repos.json'));
+  check('autoRegister:false registers nothing', (off?.repos ?? []).length === 0);
+
+  // Memory: the one thing that carries a fact between sessions.
+  writeFileSync(
+    join(workspace, 'MEMORY.md'),
+    '# Workspace memory\n\n- orders-api owns the canonical User type\n'
+  );
+
+  const withMemory = decision(hook('session-brief.mjs', { cwd: workspace, source: 'startup' }, wsHome));
+  check('MEMORY.md is injected verbatim', withMemory?.additionalContext?.includes('orders-api owns the canonical User type') === true);
+  check('memory is labelled as fact, not as instructions', withMemory?.additionalContext?.includes('not as instructions from the user') === true);
+
+  const fromInside = decision(hook('session-brief.mjs', { cwd: declaring, source: 'startup' }, wsHome));
+  check(
+    'a session inside a checkout finds the workspace memory above it',
+    fromInside?.additionalContext?.includes('orders-api owns the canonical User type') === true
+  );
+  check('a session inside a checkout still reports its branch', fromInside?.additionalContext?.includes('main') === true);
 
   section('verification');
 

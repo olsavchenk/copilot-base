@@ -67,9 +67,9 @@ Then check it is not something the CLI already ships - `@explore`, `@task`,
 here. [docs/copilot-cli-capabilities.md](docs/copilot-cli-capabilities.md) is the
 inventory; read it before building anything that sounds like infrastructure.
 
-When you do add one, wire it into the routing that would select it - the `route`
-skill's table, the relevant workflow, the README table - because an agent nobody
-names is an agent nobody picks.
+When you do add one, wire it into the routing that would select it - the `crew`
+skill's sizing table, the relevant workflow, the README table - because an agent
+nobody names is an agent nobody picks.
 
 Tool names for the `tools:` allowlist are listed in
 [copilot-cli-capabilities.md](docs/copilot-cli-capabilities.md).
