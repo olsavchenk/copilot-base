@@ -7,6 +7,40 @@ and the check that decides it is finished. Theory is in
 
 ---
 
+## Not sure which of these applies
+
+**Topology:** none yet.
+
+Ask for the `route` skill. It reads down one table, stops at the first row that
+fits, checks that row's precondition, and hands off - naming the shape and the
+reason in one line. It is the front door for anyone who has not memorised the
+rest of this file.
+
+The one answer it gives that is not a runbook below: if nobody can say what
+"done" means, it sends `@spec-writer` and stops. Route no further until that
+comes back.
+
+---
+
+## Ask with no definition of done
+
+**Topology:** solo, one adversarial artifact.
+
+1. Send `@spec-writer` with the request as stated, however vague.
+2. It reads the current behaviour, restates the ask as an observable change, and
+   writes outcomes with falsifiable acceptance criteria - or reports that it
+   cannot, and says what it needs to know.
+3. **Read its OPEN QUESTIONS and answer them.** These are product decisions, and
+   they are yours. An agent that picks for you is the failure this step exists to
+   prevent.
+4. Only then go to the `plan` skill.
+
+Do not compress steps 1-4 into "just start and we will see". Ambiguity is the one
+input that multiplies across agents: one confused agent produces one confused
+result; five produce five incompatible ones and a merge conflict.
+
+---
+
 ## Feature, small (one sitting, one file set)
 
 **Topology:** solo.

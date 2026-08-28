@@ -10,6 +10,13 @@ This is the cheapest place to fix a design, so spend here.
 
 ## Steps
 
+**0. Check the ask is shaped.** Can you state, in one sentence, what will be
+observably different when this is done, and name something that would prove it?
+If not, stop and send `@spec-writer` first, then show the human its outcomes and
+open questions before drafting anything. A plan built on an unshaped ask
+decomposes a guess into slices, and every slice inherits the guess. This gate
+costs one agent; skipping it costs the fan-out.
+
 **1. Ground yourself first.** Read `AGENTS.md` and skim the directory structure.
 If the request touches an area you have not read, send one or two `@explore`
 agents with specific questions. Do not send one to "look around" - give each a
@@ -60,4 +67,5 @@ plans get quietly abandoned halfway through.
   A one-slice answer is a good outcome, not a failed workflow.
 - If the request is ambiguous in a way that changes the design, ask the human
   before drafting. Ambiguity that only changes wording, decide yourself and note
-  the assumption.
+  the assumption. Ambiguity about what *finished* means is neither - that is
+  step 0 and `@spec-writer`.

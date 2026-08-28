@@ -30,13 +30,18 @@ repository on the machine. Per-repository facts live in a registry at
    this on repositories they do not own.
 3. **Never report work complete on a failing check.** For subagents this is
    enforced: the `subagentStop` hook blocks a completion while the check is red.
-4. **Every claim about existing behaviour carries a `file:line`.** If you have
+4. **Never make a check pass by weakening it.** No deleted assertions, no added
+   skips, no loosened tolerances, no narrowed inputs, no `--no-verify`. Rule 3 is
+   the pressure that produces a gamed test - it makes red block your completion,
+   so the cheapest escape is to make red go away dishonestly. That escape is
+   closed. Work that cannot pass honestly is reported failing, with the reason.
+5. **Every claim about existing behaviour carries a `file:line`.** If you have
    not read it, do not assert it.
-5. **Stay inside the file set you were given.** If the work requires a file
+6. **Stay inside the file set you were given.** If the work requires a file
    outside it, stop and report the collision. Another agent may own that file,
    possibly in another repository.
-6. **Do not reimplement what the CLI already ships.** See the table below.
-7. **Never push or open a pull request unless delivery mode says so.** The mode
+7. **Do not reimplement what the CLI already ships.** See the table below.
+8. **Never push or open a pull request unless delivery mode says so.** The mode
    is configuration, not a judgement call: `local` means branches and commits
    only, however finished the work looks.
 
@@ -80,6 +85,8 @@ never from "the current repository", which is usually somebody else's.
 
 | Shape | Approach |
 |---|---|
+| Nobody can say what "done" is | `@spec-writer` first, then stop for a human. |
+| You cannot tell which row this is | `route` skill - it classifies and hands off. |
 | One file, one sitting | Do it. No plan, no delegation. |
 | Several files, one concern | Do it, sending `@explore` first if you need to locate things. |
 | Multiple concerns, one session | `plan` skill, then implement in order. |

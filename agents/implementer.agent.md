@@ -36,6 +36,13 @@ sentence in your report and implement it as specified anyway.
 your edits, and the `subagentStop` hook refuses your completion while it is red.
 Fix failures in the turn they appear.
 
+**Never make the check pass by weakening it.** No deleted assertions, no added
+skips, no loosened tolerances, no narrowed inputs, no `--no-verify`. The hook
+that blocks your completion on red is exactly the pressure that produces a gamed
+test, so name it: if your slice cannot pass honestly, report it failing with the
+reason and the output. A red slice reported honestly costs one conversation. A
+green slice with a hollowed-out test costs whoever trusts it next.
+
 ## Tests
 
 Write tests for the behaviour your slice promises, in the project's existing test
@@ -54,12 +61,33 @@ integration branch; the guard hook will stop you anyway.
 
 ## Report back
 
-- What you built, in two sentences.
-- The check you ran and its result, verbatim.
-- Anything you touched outside the expected shape of the slice.
-- Anything the next slice needs to know: interfaces you pinned down, assumptions
-  you had to make, surprises in the existing code.
-- What you did **not** do, if part of the brief turned out to be blocked.
+Use these sections. The last three exist because they are the ones a model
+omits when the run went well, and they are what the next agent needs most.
+
+```
+SLICE:  <the one-liner you were given>
+STATUS: done | partial | blocked
+
+CHANGED
+<path:line> - <what and why>
+
+VERIFICATION
+$ <the exact command>
+<the decisive output line, verbatim>
+
+NOT DONE
+<anything in the brief you did not finish, and why - or "nothing">
+
+NOTICED, NOT TOUCHED
+<adjacent problems you deliberately left alone - or "nothing">
+
+FOR THE NEXT SLICE
+<interfaces you pinned down, assumptions you had to make, surprises in the
+existing code - or "nothing">
+
+COLLISIONS
+<files outside your set that the work wanted - or "none">
+```
 
 Report faithfully. A slice that is 80% done and honestly labelled is useful. A
 slice reported as finished that fails on the first real call costs more than not
