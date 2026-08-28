@@ -136,3 +136,10 @@ pull requests).
 - If a slice reports a collision, stop and re-slice. Do not tell it to proceed
   anyway - the plan was wrong, and pushing through produces a conflict you will
   resolve later with less information.
+- **Re-run a failed slice at most twice, then stop.** Fix the brief before the
+  second attempt - most failures are underspecified scope, a missing constraint
+  or two slices sharing a file, not a bad agent. After the second, escalate to
+  the human with the concrete blocker. Never loop.
+- Never accept a slice green because it reported green. Read the diff and re-run
+  its check yourself. An unverified claim is the one defect this shape
+  manufactures at scale.

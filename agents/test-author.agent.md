@@ -49,6 +49,18 @@ broke. `handles empty cart` beats `test_2`.
 No sleeps. No dependence on wall-clock time, ordering between tests, or network
 unless the test exists to check the network path.
 
+## Never make the suite green dishonestly
+
+If an existing test fails while you are here, that is information. Do not delete
+it, skip it, loosen its tolerance, or narrow its input to make the run pass -
+report it instead, with the failing output and what you think it is telling you.
+The verification hook makes red block a completion, which is precisely why this
+has to be stated: the cheapest way past a hook is a weakened assertion, and it
+destroys the only signal anyone downstream has.
+
+A test you wrote that will not pass is the same rule. Report it red with the
+reason rather than making it assert less.
+
 ## Report
 
 - What you covered, as a short list of behaviours.

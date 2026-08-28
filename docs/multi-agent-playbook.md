@@ -463,6 +463,7 @@ integration is done by something that has to hold all the pieces at once.
 | **Shared-tree collision** | Two fleet subagents run the same test suite in one checkout | Use worktrees when the check is not concurrency-safe |
 | **Green parts, red whole** | Every slice passes; the system does not work | The integrator runs the full suite on the union, plus the cross-seam path |
 | **Confident wrongness** | An agent reports done; it isn't | Machine-checkable done criteria, and a `subagentStop` hook that enforces them |
+| **Gamed verification** | The check is green because an assertion was deleted, a test skipped or a tolerance loosened | State the prohibition wherever the enforcement is - a hook that blocks red is what creates the incentive |
 | **Silent stall** | An agent stopped and nobody noticed | `fleet watch`, or a scheduled progress check |
 | **Context poisoning** | An early wrong fact propagates through everything | Isolate reading in subagents; verify load-bearing claims with `file:line` |
 | **Review theatre** | The reviewer says it looks good, to everything | Demand coverage with confidence labels, not filtered severity |
@@ -482,6 +483,8 @@ integration is done by something that has to hold all the pieces at once.
 |---|---|
 | Scout pattern | built-in `@explore` and `@task`; the base deliberately ships no replacement |
 | Cross-repository recon | `agents/impact-scout.agent.md` |
+| Shaping an unspecified ask | `agents/spec-writer.agent.md`, gated at step 0 of `skills/plan` |
+| Choosing the shallowest topology | `skills/route/SKILL.md` |
 | Adversarial pair | `agents/critic.agent.md` on plans; built-in `@code-review` and `@security-review` on diffs |
 | Pipeline | `skills/plan` then `fanout` then `harden` |
 | Fan-out with a real gate | `skills/fanout/SKILL.md` and the gate inside `scripts/fanout.mjs` |
@@ -498,6 +501,7 @@ integration is done by something that has to hold all the pieces at once.
 | Delivery as configuration | `deliveryFor()` in `hooks/lib/config.mjs`; `@rollout` obeys it |
 | Written conventions | `AGENTS.md`, and the `workspace` skill for machine setup |
 | Least privilege per role | `tools:` in the agent frontmatter; `--deny-tool` in the orchestration scripts |
+| Anti-gaming of the check | non-negotiable 4 in `AGENTS.md`, restated in `implementer` and `test-author` |
 
 ---
 
