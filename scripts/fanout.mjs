@@ -49,6 +49,7 @@ import {
   die,
   ensureDir,
   git,
+  invoke,
   log,
   newSummary,
   readJson,
@@ -146,14 +147,14 @@ function gate(plan) {
       problems.push(
         entry
           ? `slice ${slice.name} names repo "${slice.repo}", registered at ${entry.path}, which is not a usable git repository right now`
-          : `slice ${slice.name} names repo "${slice.repo}", which is neither registered nor a git repository (node scripts/repos.mjs list)`
+          : `slice ${slice.name} names repo "${slice.repo}", which is neither registered nor a git repository (${invoke('repos.mjs')} list)`
       );
     }
 
     const agent = slice.agent ?? 'implementer';
     if (!agentAvailable(agent, path)) {
       problems.push(
-        `slice ${slice.name} wants the '${agent}' agent, which is not installed - run: node scripts/install.mjs`
+        `slice ${slice.name} wants the '${agent}' agent, which is not installed - run: ${invoke('install.mjs')}`
       );
     }
   }
@@ -353,8 +354,7 @@ function runCheck(command, worktree) {
   const status = result.status ?? 1;
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   return {
-    command,
-    ok: status === 0,
+      ok: status === 0,
     status,
     tail: output.split(/\r?\n/).slice(-20).join('\n').trim(),
   };
@@ -362,7 +362,7 @@ function runCheck(command, worktree) {
 
 async function run() {
   const planPath = positional[0];
-  if (!planPath) die('usage: node scripts/fanout.mjs run <slices.json> [--dry-run]');
+  if (!planPath) die(`usage: ${invoke('fanout.mjs')} run <slices.json> [--dry-run]`);
 
   const plan = readJson(resolve(process.cwd(), planPath));
   if (!plan) die(`cannot read ${planPath}`);
@@ -579,7 +579,7 @@ if (process.argv[1]?.endsWith('fanout.mjs')) {
       report();
       break;
     default:
-      log('usage: node scripts/fanout.mjs <run|report> [args]');
+      log(`usage: ${invoke('fanout.mjs')} <run|report> [args]`);
       if (!existsSync(runsRoot())) log(`(no runs yet; artifacts will go to ${runsRoot()})`);
       process.exit(command ? 1 : 0);
   }

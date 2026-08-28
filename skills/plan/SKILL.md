@@ -59,6 +59,13 @@ the next step is one command rather than a translation exercise.
 Then stop. Do not start implementing. Planning and building in one turn is how
 plans get quietly abandoned halfway through.
 
+**Unless `crew` sent you here.** Then this skill is one stage of a longer run,
+not the answer: hand the plan back and let `crew` resume at its step 3. Stopping
+here would end a run that was asked to change something without changing
+anything, which is the more expensive failure of the two. The safeguard the stop
+exists for - a wrong plan implemented before anyone read it - is still met,
+because `crew` shows the plan before it implements it.
+
 ## Rules
 
 - No plan for code nobody read. Every claim about existing behaviour needs a

@@ -37,6 +37,24 @@ export function copilotHome() {
   return process.env.COPILOT_HOME || join(homedir(), '.copilot');
 }
 
+/**
+ * Where `repos.mjs`, `fanout.mjs`, `fleet.mjs` and `wt.mjs` actually live, as an
+ * absolute path.
+ *
+ * The skills are installed machine-wide and run from whatever directory you
+ * opened, so a relative `node scripts/repos.mjs` resolves nowhere. This is the
+ * single definition of the `<base>/scripts` the skills refer to, and the
+ * session brief prints it so nobody has to guess.
+ *
+ * Installed copy first, checkout second: working inside this repository before
+ * running the install should still give you commands that run.
+ */
+export function scriptsRoot() {
+  const installed = join(baseHome(), 'scripts');
+  if (existsSync(join(installed, 'repos.mjs'))) return installed;
+  return join(packageRoot(), 'scripts');
+}
+
 export function readJsonFile(path, fallback) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'));

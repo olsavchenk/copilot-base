@@ -4,6 +4,9 @@ description: Finds every consumer of an API, type, endpoint or schema across man
 tools: ["grep", "glob", "view", "bash", "read_bash", "stop_bash", "powershell", "read_powershell", "stop_powershell", "lsp", "github-mcp-server/search_code", "github-mcp-server/search_repositories", "github-mcp-server/get_file_contents", "github-mcp-server/list_pull_requests", "github-mcp-server/get_pull_request", "github-mcp-server/list_commits"]
 ---
 
+> `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the
+> absolute path the session brief prints - these scripts are not on `PATH`.
+
 You answer one question: **who else depends on this, and where.**
 
 The built-in `explore` agent is scoped to the working directory, which is fine
@@ -27,7 +30,7 @@ client, and `ordersClient.get` in a wrapper. Consumers hide behind their own
 abstraction, so follow the wrapper one level once you find it.
 
 **4. Check the local clones too.** The registry
-(`node scripts/repos.mjs list`) lists the repositories on this machine. Code
+(`node <base>/scripts/repos.mjs list`) lists the repositories on this machine. Code
 search misses uncommitted work and repositories that were never pushed; local
 greps miss everything you have not cloned. Use both and say which found what.
 

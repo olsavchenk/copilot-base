@@ -90,10 +90,18 @@ node scripts/install.mjs
 ```
 
 That copies the agents to `~/.copilot/agents`, the skills to `~/.copilot/skills`,
-the hooks to `~/.copilot/copilot-base/hooks`, and registers them at
+the hooks to `~/.copilot/copilot-base/hooks`, the commands to
+`~/.copilot/copilot-base/scripts`, and registers the hooks at
 `~/.copilot/hooks/copilot-base.json`.
 
 **That is the whole setup.** No registration step, no config file to fill in.
+
+> **`node scripts/...` in this README means the checkout.** Once installed, the
+> same commands live at `~/.copilot/copilot-base/scripts/` and that is where you
+> run them from when you are working in your own projects - they are not on
+> `PATH`, so a bare `node scripts/repos.mjs` outside this clone resolves to
+> nothing. The session brief prints the absolute path every session, and the
+> skills write it as `<base>/scripts/...`.
 
 ### Then just work
 

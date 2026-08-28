@@ -15,7 +15,6 @@
 import { spawnSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
 import {
-  baseHome,
   deliveryFor,
   registry,
   registryPath,
@@ -25,7 +24,7 @@ import {
 // needs them too. One implementation, so a repository is described the same way
 // whether you registered it by hand or a session found it.
 import { findRepos, proposeVerify } from '../hooks/lib/discover.mjs';
-import { die, log, readJson, tryGit, writeJson } from './lib/shared.mjs';
+import { die, invoke, log, readJson, tryGit, writeJson } from './lib/shared.mjs';
 
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
@@ -56,7 +55,7 @@ function normalise(path) {
 
 function scan() {
   const root = positional[0];
-  if (!root) die('usage: node scripts/repos.mjs scan <dir> [--depth 3] [--add]');
+  if (!root) die(`usage: ${invoke('repos.mjs')} scan <dir> [--depth 3] [--add]`);
 
   const depth = Number(flags.depth ?? 3);
   const found = findRepos(root, { depth, limit: 200 });
@@ -82,7 +81,7 @@ function scan() {
     log('');
     log('Nothing was written. Re-run with --add to register the unregistered ones,');
     log('or add them one at a time with an explicit check:');
-    log('  node scripts/repos.mjs add <path> --verify "<command>"');
+    log(`  ${invoke('repos.mjs')} add <path> --verify "<command>"`);
     return;
   }
 
@@ -94,13 +93,13 @@ function scan() {
   if (missing.length) {
     log(`no check detected for: ${missing.join(', ')}`);
     log('Set one, or those repositories run unverified:');
-    log('  node scripts/repos.mjs set <name> verify "<command>"');
+    log(`  ${invoke('repos.mjs')} set <name> verify "<command>"`);
   }
 }
 
 function add() {
   const path = positional[0];
-  if (!path) die('usage: node scripts/repos.mjs add <path> [--name x] [--verify "..."]');
+  if (!path) die(`usage: ${invoke('repos.mjs')} add <path> [--name x] [--verify "..."]`);
   const full = normalise(path);
   if (!tryGit(['rev-parse', '--git-dir'], full)) die(`not a git repository: ${full}`);
 
@@ -125,7 +124,7 @@ function list() {
   const repos = registry();
   if (!repos.length) {
     log('no repositories registered');
-    log('  node scripts/repos.mjs scan <dir> --add');
+    log(`  ${invoke('repos.mjs')} scan <dir> --add`);
     return;
   }
   log(`registry: ${registryPath()}`);
@@ -143,14 +142,14 @@ function list() {
     log('');
     log('[guessed] - inferred from the project when a session opened this workspace,');
     log('not confirmed by anyone. Run it, and correct what is wrong:');
-    log('  node scripts/repos.mjs set <name> verify "<command>"');
+    log(`  ${invoke('repos.mjs')} set <name> verify "<command>"`);
   }
 }
 
 function set() {
   const [name, key, ...valueParts] = positional;
   const value = valueParts.join(' ');
-  if (!name || !key) die('usage: node scripts/repos.mjs set <name> <verify|delivery|role|path> <value>');
+  if (!name || !key) die(`usage: ${invoke('repos.mjs')} set <name> <verify|delivery|role|path> <value>`);
   if (!['verify', 'delivery', 'role', 'path'].includes(key)) die(`cannot set '${key}'`);
   if (key === 'delivery' && !['local', 'pr'].includes(value)) die("delivery must be 'local' or 'pr'");
 
@@ -164,7 +163,7 @@ function set() {
 
 function remove() {
   const name = positional[0];
-  if (!name) die('usage: node scripts/repos.mjs remove <name>');
+  if (!name) die(`usage: ${invoke('repos.mjs')} remove <name>`);
   const data = load();
   const before = data.repos.length;
   data.repos = data.repos.filter((r) => r.name !== name);
@@ -236,7 +235,7 @@ switch (command) {
     check();
     break;
   default:
-    log('usage: node scripts/repos.mjs <scan|add|list|set|check|remove> [args]');
-    log(`registry lives at ${join(baseHome(), 'repos.json')}`);
+    log(`usage: ${invoke('repos.mjs')} <scan|add|list|set|check|remove> [args]`);
+    log(`registry lives at ${registryPath()}`);
     process.exit(command ? 1 : 0);
 }

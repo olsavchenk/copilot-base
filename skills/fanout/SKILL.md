@@ -5,6 +5,9 @@ description: Run independent slices of a plan in parallel - across one repositor
 
 # Fan out
 
+> `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the
+> absolute path the session brief prints - these scripts are not on `PATH`.
+
 Run the slices in parallel and bring them back as working branches.
 
 ## Before anything - the gate
@@ -37,7 +40,7 @@ window; they **share this working tree and this HEAD**. Use it when the slices
 only need disjoint *files* and one combined commit is fine. Cheapest option,
 nothing to clean up afterwards.
 
-**`node scripts/fanout.mjs run slices.json`** - one git worktree and one
+**`node <base>/scripts/fanout.mjs run slices.json`** - one git worktree and one
 Copilot session per slice. Use it when any of these is true:
 
 - each slice needs its own branch or its own commits
@@ -51,8 +54,8 @@ same test suite in one tree - is silent and confusing.
 ## Running the script
 
 ```
-node scripts/fanout.mjs run slices.json --dry-run    # see the gate and the briefs
-node scripts/fanout.mjs run slices.json
+node <base>/scripts/fanout.mjs run slices.json --dry-run    # see the gate and the briefs
+node <base>/scripts/fanout.mjs run slices.json
 ```
 
 `slices.json` is written by the `plan` skill, or by hand:
@@ -81,7 +84,7 @@ node scripts/fanout.mjs run slices.json
 }
 ```
 
-`repo` is a name from the registry (`node scripts/repos.mjs list`) or a path.
+`repo` is a name from the registry (`node <base>/scripts/repos.mjs list`) or a path.
 Omit it for the repository you are standing in. `doneWhen` defaults to that
 repository's registered check.
 

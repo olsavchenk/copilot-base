@@ -22,6 +22,7 @@ import {
   delegatedArgs,
   delegatedEnv,
   die,
+  invoke,
   log,
   spawnCopilot,
   tryGit,
@@ -42,7 +43,7 @@ for (let i = 0; i < argv.length; i++) {
 
 const goal = words.join(' ').trim();
 if (!goal || flags.help) {
-  log('usage: node scripts/crew.mjs "<what you want done>" [--repo <name|path>] [--bg]');
+  log(`usage: ${invoke('crew.mjs')} "<what you want done>" [--repo <name|path>] [--bg]`);
   log('');
   log('  --repo <name|path>  start in this repository (default: the current directory)');
   log('  --bg                detach and return immediately');

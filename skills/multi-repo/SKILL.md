@@ -5,6 +5,9 @@ description: Land one change across several repositories at once - find every co
 
 # A change across several repositories
 
+> `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the
+> absolute path the session brief prints - these scripts are not on `PATH`.
+
 The shape this exists for: one API changes, and five services that call it have
 to change with it. Doing that repository by repository means the contract gets
 re-decided five times, and you find out on the fifth that the first one was
@@ -20,7 +23,7 @@ Two outputs from that table matter more than the rest:
 
 - **Consumers nobody knew about.** These are why the first plan is usually wrong.
 - **Affected repositories that are not registered.** Nothing can fan out into
-  them until they are: `node scripts/repos.mjs add <path> --verify "<check>"`.
+  them until they are: `node <base>/scripts/repos.mjs add <path> --verify "<check>"`.
 
 ## 2. Write the contract once, before anyone starts
 
@@ -48,8 +51,8 @@ assuming a type it cannot see?
 ## 4. Run it
 
 ```
-node scripts/fanout.mjs run slices.json --dry-run   # waves, briefs, branches
-node scripts/fanout.mjs run slices.json
+node <base>/scripts/fanout.mjs run slices.json --dry-run   # waves, briefs, branches
+node <base>/scripts/fanout.mjs run slices.json
 ```
 
 Each slice gets its own worktree, its own branch in its own repository, its own
@@ -70,7 +73,7 @@ consumer against its provider, and then delivers according to the mode:
 - **`pr`** - pushes each branch and opens a cross-linked PR per repository, in
   dependency order
 
-Check which mode you are in before you start (`node scripts/repos.mjs list`), not
+Check which mode you are in before you start (`node <base>/scripts/repos.mjs list`), not
 after.
 
 ## 6. Harden what matters
@@ -82,6 +85,15 @@ whose mistake reaches everybody.
 ## When not to use this
 
 - **One repository.** Use `plan` and `fanout` directly.
+- **The same kind of work, done separately in each repository.** Upgrading the
+  dependencies everywhere, adding a licence header everywhere, fixing one lint
+  rule everywhere - these span repositories without binding them. There is no
+  contract to write once, nothing for a consumer to resolve, and no order that
+  protects anything. Use `fanout`, which runs across several repositories
+  natively; each repository is its own slice with its own check. The tell is step
+  2: if you cannot name what one repository publishes and the others consume,
+  you are in the wrong skill, and you will find that out at the contract step
+  having already paid for the scout.
 - **The consumers can be updated later.** If the change is backwards compatible,
   ship the provider and let consumers move at their own pace. A coordinated
   rollout is expensive and should be reserved for changes that actually break.

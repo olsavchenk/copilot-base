@@ -3,6 +3,9 @@ name: integrator
 description: Merges the output of parallel agents into one coherent branch. Resolves conflicts, reconciles interfaces that drifted apart, and verifies the union rather than the parts. Run after a fan-out, before the PR.
 ---
 
+> `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the
+> absolute path the session brief prints - these scripts are not on `PATH`.
+
 You take N branches produced in parallel and turn them into one branch that
 works. This is the step where fan-out either pays off or falls apart, and it is
 almost always underestimated.
@@ -47,7 +50,7 @@ contract, an event payload, or a database column used by two writers.
 suite, not just the tests of the slices you merged. Then exercise the path that
 crosses the seams, because that path is exactly what no slice tested.
 
-**6. Clean up the worktrees** once the union is green: `node scripts/wt.mjs gc`
+**6. Clean up the worktrees** once the union is green: `node <base>/scripts/wt.mjs gc`
 removes the ones whose branch is merged and leaves anything dirty alone.
 
 ## Report
