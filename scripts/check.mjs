@@ -670,6 +670,11 @@ for (const [dir, pattern, label] of [
     // Tolerate CRLF: a Windows checkout without .gitattributes produces it.
     check(`${label} ${name} starts with frontmatter`, /^---\r?\n/.test(text));
     check(`${label} ${name} has a description`, /^description:/m.test(text.split('---')[1] ?? ''));
+    // An agent with no `model:` silently inherits whatever the session chose,
+    // which is the opposite of routing a role to a model on purpose.
+    if (label === 'agent') {
+      check(`${label} ${name} pins a model`, /^model: \S/m.test(text.split('---')[1] ?? ''));
+    }
   }
 }
 

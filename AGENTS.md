@@ -60,6 +60,7 @@ repository on the machine. Per-repository facts live in a registry at
 | your own parallel dispatcher | `/fleet` in one tree, `scripts/fanout.mjs` across branches or repos |
 | your own agent messaging | `list_agents`, `read_agent`, `write_agent`, or `fleet say` |
 | your own budget guard | `--max-ai-credits`, `/limits` |
+| your own per-role model routing | `model:` in agent frontmatter |
 
 The full inventory is in
 [docs/copilot-cli-capabilities.md](docs/copilot-cli-capabilities.md). Read it
@@ -114,6 +115,11 @@ do it.
   not a merge at all, it is `@rollout`.
 - **Send `@explore` for volume, `@impact-scout` across repositories.**
 - **Cap what you spawn.** Every background session gets `--max-ai-credits`.
+- **Match the model to the role, not to the run.** Each agent pins its own
+  `model:`: the deciding roles on `claude-sonnet-5`, the executing ones on
+  `claude-haiku-4.5`. Reasoning effort cannot follow, because it belongs to the
+  session rather than the agent - so a level chosen for one run applies to every
+  agent in it, and per-unit effort exists only across `fanout.mjs` slices.
 
 ## Verification
 

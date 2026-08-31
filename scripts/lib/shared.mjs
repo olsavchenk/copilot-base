@@ -152,8 +152,15 @@ export function delegatedEnv(extra = {}) {
  * back in through --deny-tool and the hooks, which still fire for these
  * sessions. --no-ask-user because nobody is watching. --max-ai-credits because
  * a fan-out multiplies model calls by design and an unbounded one is a bill.
+ *
+ * On `effort`: reasoning effort is a property of the *session*, not of an agent.
+ * There is no `effort:` in agent frontmatter, so every subagent a session starts
+ * inherits the level set here. Per-unit effort is only real where each unit gets
+ * its own process, which means fanout slices. The CLI also rejects an effort
+ * level when the model is `auto`, so that combination is refused here with a
+ * readable message rather than a dozen slices failing to start.
  */
-export function delegatedArgs({ prompt, agent, credits, model, transcript, extraDeny = [] }) {
+export function delegatedArgs({ prompt, agent, credits, model, effort, transcript, extraDeny = [] }) {
   const args = [
     '-p',
     prompt,
@@ -167,6 +174,10 @@ export function delegatedArgs({ prompt, agent, credits, model, transcript, extra
   for (const deny of extraDeny) args.push('--deny-tool', deny);
   if (agent) args.push('--agent', agent);
   if (model) args.push('--model', model);
+  if (effort) {
+    if (model === 'auto') die('--effort is not supported with the auto model; name a model or drop the effort');
+    args.push('--effort', effort);
+  }
   if (credits) args.push('--max-ai-credits', String(credits));
   if (transcript) args.push('--share', transcript);
   return args;

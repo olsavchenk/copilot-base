@@ -152,6 +152,7 @@ function launch({ name, dir, cwd, sessionId, prompt, agent, resume }) {
     agent,
     credits: Number(flags.credits ?? defaultCredits()),
     model: flags.model,
+    effort: flags.effort,
     transcript: join(dir, 'transcript.md'),
   });
 
