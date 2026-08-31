@@ -60,6 +60,15 @@ Two things worth noticing in that brief:
   runnable. Work there cannot be verified, and the brief says so rather than
   pretending otherwise.
 
+If you would rather it ran a long way without you, start it in autopilot
+instead - `copilot --autopilot --allow-all-tools` - or answer *yes* to the
+permission prompt when you switch modes inside the session. Autopilot with that
+prompt declined is the one setup that looks broken: the CLI stops asking, so
+every shell command and file edit is auto-denied with `Permission denied and
+could not request permission from user`, while reads carry on working. Granting
+it does not switch the guardrails off; those are hooks, and a hook `deny` wins
+over any allow flag.
+
 ## 3. Just ask for the work (5 min)
 
 Plain English. No prefix, no agent names, no slash command:

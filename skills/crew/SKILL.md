@@ -7,12 +7,18 @@ description: Take a piece of real work from a one-line request all the way to fi
 
 One request in, verified work out. You are the lead for this run: you decide how
 much structure it needs, you delegate, and you verify before you believe
-anything. You do not write the production code yourself unless step 2 says the
-work is too small to delegate.
+anything.
+
+Delegation is the default here, not the escalation. You survey through
+subagents, you implement through subagents, and what you keep is the lead's
+work: the brief, the order, the diff, the check, the report. You write
+production code yourself only in the narrow case step 3 names, and you say so
+when you do.
 
 The session brief already told you which repositories are here, what each one is,
 what proves each one works, and whatever `MEMORY.md` records about them. Use it.
-Do not re-discover it.
+Do not re-discover it. That is the workspace; the *code* is what you survey in
+step 2, and you survey it through subagents.
 
 ## 1. Work out what was actually asked
 
@@ -33,7 +39,7 @@ because the code will look correct.
 **Which repository?** Match against the projects in the session brief - by name,
 by stack, by what `MEMORY.md` says each one owns. State your choice. If two
 plausibly fit, ask rather than guessing; if the work clearly spans several, say
-so and pick the matching row in step 2.
+so and pick the matching row in step 3.
 
 **What proves it works?** The check from the session brief. If it was inferred
 rather than registered, **run it once now, before any edit**, and say what
@@ -64,15 +70,62 @@ of them, and the work is already done whichever way they answer. Stopping dead
 with nothing gathered is the one shape to avoid; a blocking question should
 arrive with a report behind it.
 
-## 2. Size it, and take the shallowest path that fits
+## 2. Survey the code before you size anything
+
+**Every run starts with a survey, and the survey is delegated.** Before you pick
+a shape in step 3, send `@explore` - two to four of them, dispatched in one
+message so they run concurrently - at the questions whose answers would change
+what you do.
+
+`@explore` is the CLI's built-in search agent: `claude-haiku-4.5`, read-only tool
+set, its own context window, explicitly safe in parallel. Nothing it reads lands
+in yours; only its answer does. That is the point. The survey is the stage that
+generates the most reading and retains the least, and paying for it out of the
+lead's context window is how a session runs out of room before it runs out of
+work.
+
+Each one gets **one question that has an answer**, and is told to reply with
+`file:line`:
+
+- Where does the thing being changed actually live, and what calls it?
+- What is the existing pattern for this kind of change, and where is the nearest
+  example of it?
+- How is this area tested today, and which command runs those tests?
+- What resolves this contract on the other side - who breaks if it changes?
+
+"Look around the repository and tell me about it" is not one of those. An agent
+sent to look around returns a summary of everything, which is the volume you were
+trying not to read.
+
+Two things this step is not:
+
+- **Not a substitute for reading the files that are about to change.** The survey
+  says where to look. Before an edit lands, someone - you or the `@implementer` -
+  has read that file in full.
+- **Not skippable because the ask looks obvious.** Obvious is where it pays: the
+  helper that already exists, the test command that is not the one you guessed,
+  the second caller nobody mentioned. The only exemption is a request that names
+  the exact file and a file you have already read this session - say that in one
+  line and move on.
+
+Then fold what came back into one short paragraph of findings, with paths. That
+paragraph is what step 3 sizes and what every brief in step 4 is built from - the
+raw reports are not repeated to anyone.
+
+## 3. Size it: how much planning, and who types
+
+Two questions, not one. Collapsing them is what turns a routine change into
+either a five-agent ceremony or a lead agent typing for an hour with a full
+context window.
+
+### How much planning does it need?
 
 Read down. Stop at the first row that fits. The rows get more expensive.
 
-| The work is | Do this |
+| The work is | Planning |
 |---|---|
 | Undefined - nobody can say what "done" is | `@spec-writer`, show the user its outcomes and open questions, **stop** |
-| One file set, one sitting | Do it yourself. Branch, change, check, commit. |
-| Findable but not obvious where | `@explore` with a question that has an answer, then do it yourself |
+| One concern, one file set, and the survey already answered it | none - the survey was the plan |
 | Several concerns, one repository | `@tech-lead` for slices, `@critic` on the plan, then implement in order |
 | Two or more genuinely independent slices - in one repository or several | plan as above, then the `fanout` skill |
 | Repositories that must change **together**, because one contract binds them | the `multi-repo` skill - `@impact-scout` first, contract written once |
@@ -83,8 +136,8 @@ Three rules about that table:
 - **"Undefined" wins over everything.** A vague ask routed into a fan-out
   produces five confident interpretations and a merge conflict. Shape it first,
   even when the work sounds small.
-- **Never climb a row for thoroughness.** Extra structure is not extra care, it
-  is extra places for the intent to be paraphrased. Most requests are row two.
+- **Never climb a row for thoroughness.** Extra planning is not extra care, it is
+  extra places for the intent to be paraphrased. Most requests are row two.
 - **Count contracts, not repositories.** The last two rows both touch several
   repositories, and the number of repositories does not tell them apart. Ask
   instead: *does one of these repositories publish something the others resolve -
@@ -98,16 +151,39 @@ Three rules about that table:
   `multi-repo` buys you a contract step with no contract to write, and you will
   notice halfway through that there is nothing to sequence.
 
-Say which row you picked and the tell that decided it. One line.
+### Who types?
 
-## 3. Do it
+**A subagent does, by default.** `@implementer` for code, `@test-author` for
+tests, `@docs-writer` for the written layer - all three on `claude-haiku-4.5`,
+each with its own context window. That holds for row two as much as for row four:
+a single-concern change is still a change somebody else can be briefed on.
 
-**You own the run from here to step 5, including the parts another skill does
+Do it yourself only when the brief would be longer than the diff. Concretely: a
+one-line fix, a rename, a version bump, a config value, or a file you have
+already read in full this session that nothing else touches. Say which of those
+it was, in the same line where you name the row.
+
+That exemption is deliberately narrow, because the failure it prevents is
+one-directional. A lead that implements everything itself arrives at step 5 with
+its context full of the details of the first slice, briefing the third one badly
+and reviewing its own work. "It will be quicker if I just do it" is how a run
+ends at 80% context with no report.
+
+**The rule against climbing rows is about planning, and only about planning.**
+Sending `@implementer` is not structure - it is one call, with a brief you had to
+write down anyway.
+
+Say which planning row you picked, the tell that decided it, and who is doing the
+typing. One line.
+
+## 4. Do it
+
+**You own the run from here to step 6, including the parts another skill does
 for you.** `plan`, `fanout`, `multi-repo` and `harden` each end with their own
 stop - `plan` in particular ends "do not start implementing", which is right when
 a human invoked it directly and wrong here, where it is one stage of yours. When
 a nested skill hands its output back, **come back to this step and keep going**.
-The run is not over because a stage finished; it is over when step 5 has printed
+The run is not over because a stage finished; it is over when step 6 has printed
 a report.
 
 There is exactly one exception, and it is the `@spec-writer` row: an undefined
@@ -133,16 +209,22 @@ different branch than you found it, unless that branch holds commits you made an
 reported.
 
 **Delegating?** Every brief stands alone - the agent cannot see this
-conversation. It gets: the goal, the repository and its path, the file set it
-owns, the interface it must satisfy, the exact check, and what is out of scope.
-Issue independent `Agent` calls in one message so they run concurrently, and give
-concurrent agents in one repository separate worktrees.
+conversation, your survey, or the plan. It gets: the goal, the repository and its
+path, the file set it owns, the interface it must satisfy, the exact check, the
+findings from step 2 it needs, and what is out of scope.
 
-**Doing it yourself?** Read the target files and the nearest existing example of
-the pattern before writing. Match the surrounding code. Smallest change that
-satisfies the requirement.
+Dispatch by naming the agent - `@implementer`, `@test-author` - in your message,
+or with the `task` tool. **There is no `Agent` tool in this CLI**; looking for one
+and not finding it is not a reason to do the work yourself. Independent
+dispatches issued in a single message run concurrently. Concurrent agents in one
+repository need separate worktrees, which is what the `fanout` skill exists to
+give them - do not run two writers in one checkout.
 
-## 4. Verify before believing any of it
+**Doing it yourself?** Only in the case step 3 names. Read the target files and
+the nearest existing example of the pattern before writing. Match the surrounding
+code. Smallest change that satisfies the requirement.
+
+## 5. Verify before believing any of it
 
 This is the step that makes the rest worth anything, and it is the one most
 worth resisting the urge to skip.
@@ -171,7 +253,7 @@ Re-delegate a failed piece at most twice, fixing the brief between attempts -
 most failures are underspecified scope, not a bad agent. After the second, stop
 and escalate with the concrete blocker. Never loop.
 
-## 5. Report, and stop
+## 6. Report, and stop
 
 ```
 WORK:   <what was asked, in one line>
@@ -212,7 +294,7 @@ Then stop. **Do not push and do not open a pull request** unless the delivery
 mode says so or the user asked - `local` is the default and it means branches and
 commits only. Say what you would run next rather than running it.
 
-## 6. Offer to remember what was learned
+## 7. Offer to remember what was learned
 
 If the run turned up something a future session would want and could not
 re-derive from the code - which repository actually owns a surface, a convention
@@ -220,8 +302,32 @@ nobody wrote down, a check that is a lie, what a ticket prefix means - offer to
 hand it to `@memory-keeper`. One line, at the end. Do not write `MEMORY.md`
 yourself and do not ask twice.
 
+## If tool calls come back denied
+
+`Permission denied and could not request permission from user` is not a guardrail
+firing and not something to route around. It is the CLI saying there was no
+standing approval rule *and* no way to ask: autopilot entered with limited
+permissions is the usual cause. Read-only tools keep working, which is why it
+looks specifically like the shell and the editor are broken.
+
+Stop and hand the fix back, in one line - any of these:
+
+- in the session: `/allow-all`
+- at the autopilot prompt: pick *Yes, remember for future*
+- next start: `copilot --autopilot --allow-all-tools`
+
+Elevating there does not turn the guardrails off. `guard-protected-paths`,
+`guard-main-branch`, the post-edit check and `guard-subagent-done` are user-level
+hooks: they fire in every repository whatever the permission mode is, and a hook
+`deny` beats `--allow-all-tools`.
+
+A hook denial reads differently - it names the rule it applied and what would
+satisfy it. That one is a real decision, and it belongs to the human.
+
 ## Rules
 
+- **Survey first, and delegate the survey.** `@explore` before you size, every
+  run. The one exemption is in step 2 and it is narrower than it feels.
 - **The brief in context is the map.** Do not re-scan the workspace or re-read
   what the session brief already told you.
 - **One request, one classification.** If the request holds two genuinely

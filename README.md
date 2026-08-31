@@ -120,9 +120,24 @@ them. Then say what you want, in plain English:
 implement user story ABS-312
 ```
 
-That triggers the `crew` skill, which works out which repository the story
-belongs in, sizes the work, delegates it or does it directly, runs the check, and
-reports back on a branch. You do not invoke agents one at a time.
+That triggers the `crew` skill, which surveys the code with a handful of
+`@explore` agents, works out which repository the story belongs in, sizes the
+work, briefs `@implementer` and friends, runs the check, and reports back on a
+branch. You do not invoke agents one at a time.
+
+If you want it to run for a long stretch without you, start it in autopilot -
+and say yes to the permission prompt it opens with:
+
+```bash
+copilot --autopilot --allow-all-tools
+```
+
+Autopilot with the prompt declined is the one configuration that looks broken:
+the CLI stops asking, nothing is approved, and almost every shell command and
+file edit comes back `Permission denied and could not request permission from
+user`. The flag is not a hole in the guardrails - the guards in this base are
+hooks, they fire whatever the permission mode is, and a hook `deny` beats
+`--allow-all-tools`.
 
 Copilot CLI has no custom slash commands - the namespace is fixed - so there is
 no `/crew` to type. You do not need one; the skill triggers on the request
@@ -347,6 +362,14 @@ to take seconds, not minutes. Register the fast half - typecheck plus unit tests
 
 **An agent cannot commit.** That is `guard-main-branch`, and it is correct: you
 are on `main`, `master`, `develop` or `release/*`. Branch first.
+
+**Almost every shell command and file edit says `Permission denied and could not
+request permission from user`.** Autopilot, with the permission prompt declined.
+Autopilot is a mode, not a permission grant: with "limited permissions" the CLI
+stops prompting and auto-denies anything without a standing approval rule, which
+is why reads still work and nothing else does. Fix it with `/allow-all` in the
+session, or start with `copilot --autopilot --allow-all-tools`. The base's guards
+are hooks and keep firing either way.
 
 **An edit was denied, citing a protected path.** That is
 `guard-protected-paths`, reading
