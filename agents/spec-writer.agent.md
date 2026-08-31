@@ -1,6 +1,7 @@
 ---
 name: spec-writer
 description: Turns a vague request into falsifiable acceptance criteria before anyone plans or writes code. Use when nobody has defined what "done" means - "make onboarding better", "improve performance", "clean up the dashboard". Writes a spec file; never edits existing code.
+model: claude-sonnet-5
 tools: ["grep", "glob", "view", "bash", "read_bash", "stop_bash", "powershell", "read_powershell", "stop_powershell", "lsp", "create", "web_search", "web_fetch"]
 ---
 

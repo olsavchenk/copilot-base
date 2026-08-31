@@ -1,6 +1,7 @@
 ---
 name: integrator
 description: Merges the output of parallel agents into one coherent branch. Resolves conflicts, reconciles interfaces that drifted apart, and verifies the union rather than the parts. Run after a fan-out, before the PR.
+model: claude-sonnet-5
 ---
 
 > `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the

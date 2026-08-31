@@ -49,6 +49,7 @@ if (!goal || flags.help) {
   log('  --bg                detach and return immediately');
   log('  --credits <n>       AI credit cap for the run');
   log('  --model <name>      model override');
+  log('  --effort <level>    reasoning effort: none|minimal|low|medium|high|xhigh|max');
   process.exit(flags.help ? 0 : 1); // asking for help succeeded; forgetting the goal did not
 }
 
@@ -77,6 +78,7 @@ const args = delegatedArgs({
   prompt,
   credits: Number(flags.credits ?? defaultCredits()),
   model: flags.model ? String(flags.model) : undefined,
+  effort: flags.effort ? String(flags.effort) : undefined,
 });
 
 log(`crew: ${goal}`);

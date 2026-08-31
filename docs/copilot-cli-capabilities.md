@@ -6,8 +6,9 @@ version of it is worse, slower and costs credits.
 
 Verified against **GitHub Copilot CLI 1.0.80** on 2026-08-27, from
 `copilot --help`, the `copilot help` topics, and the agent definitions and
-schemas shipped inside the npm package. Re-verify with the commands at the
-bottom - this moves fast.
+schemas shipped inside the npm package; the model and effort section re-verified
+against **1.0.81** on 2026-08-31. Re-verify with the commands at the bottom -
+this moves fast.
 
 ---
 
@@ -41,6 +42,10 @@ Frontmatter: `description` (required), `name`, `tools`, `model`, `target`,
 `tools` accepts a comma-separated string or a list, `["*"]` for everything,
 `[]` for nothing, and MCP-namespaced entries like `github-mcp-server/get_commit`.
 Prompt bodies are capped at 30,000 characters.
+
+**There is no `effort:` key.** Model is per agent; reasoning effort is not - see
+[Model and effort](#model-and-effort) below, because the difference decides where
+in this base each one can be set.
 
 Invoke one with `@name` in a prompt, `/agent name`, or `--agent name`. Work done
 by a custom agent runs in a subagent with its own context window.
@@ -229,13 +234,51 @@ commits, or a check that cannot run twice at once are not. That is what
 
 - `--max-ai-credits <n>` and `/limits` - a soft cap per session, shared by its
   subagents. Fleet mode multiplies model calls by design; cap it.
-- `--effort none|minimal|low|medium|high|xhigh|max` - reasoning effort.
+- `--effort none|minimal|low|medium|high|xhigh|max` (alias `--reasoning-effort`)
+  - reasoning effort, per session.
 - `--mode interactive|plan|autopilot`, `--plan`, `--autopilot`,
   `--max-autopilot-continues <n>` - autopilot is what buys long autonomy in one
   process.
 - `--output-format json` - JSONL, one event per line. The full schema ships in
   the package at `schemas/session-events.schema.json`.
 - `--model`, `COPILOT_MODEL`, `/model`.
+
+## Model and effort
+
+The two knobs are not symmetrical, and the asymmetry is the whole story.
+
+**Model is per agent.** `model:` in `*.agent.md` frontmatter binds a model to a
+role, and it holds wherever that agent runs - invoked as `@name`, dispatched by
+`/fleet`, or started by `--agent`. Model ids in 1.0.81 include `claude-opus-5`,
+`claude-sonnet-5`, `claude-haiku-4.5`, `claude-opus-4.8-fast`, the `gpt-5.x`
+family and `gemini-3.x`. `--model`, `COPILOT_MODEL` and `/model` set the session
+default that an agent without a `model:` inherits.
+
+**Effort is per session.** It is resolved once, when the session starts, and
+every subagent that session dispatches inherits it. So within one run, the agent
+doing the thinking and the agent doing the typing necessarily share a level.
+Effort becomes per-unit only where each unit gets its own process - which in this
+base means `fanout.mjs` slices, one `copilot` invocation each.
+
+The CLI refuses an effort level when the model is `auto`
+(*"Reasoning effort is not supported when using the auto model"*), so
+`delegatedArgs()` refuses that pair up front rather than letting a fan-out fail
+one slice at a time.
+
+Built-in subagents have their own settings, reachable through `/subagents`:
+`copilot_cli_execution_subagent_model` for `task` and
+`copilot_cli_search_subagent_model` for `explore`. Both default to a cheap model
+already; there is no reason to raise them.
+
+The assignment this base ships:
+
+| Agents | Model | Why |
+|---|---|---|
+| `tech-lead`, `critic`, `spec-writer`, `rollout`, `integrator` | `claude-sonnet-5` | decompose, judge, resolve conflicts - work where a wrong call is expensive downstream |
+| `implementer`, `test-author`, `docs-writer`, `impact-scout`, `memory-keeper` | `claude-haiku-4.5` | execute a written brief, or search and summarise |
+
+`integrator` sits on the thinking side deliberately: reconciling interfaces that
+drifted apart is a judgement call, not a merge.
 
 ## Tool names
 

@@ -1,6 +1,7 @@
 ---
 name: memory-keeper
 description: Maintains the workspace MEMORY.md - the facts about a set of projects that future sessions cannot re-derive from the code. Use after learning something durable (what a repository actually owns, a convention nobody wrote down, what a ticket prefix means, a check that lies), or when MEMORY.md has grown stale or too long. Writes only that one file.
+model: claude-haiku-4.5
 tools: ["grep", "glob", "view", "bash", "read_bash", "stop_bash", "powershell", "read_powershell", "stop_powershell", "lsp", "create", "edit", "str_replace_editor"]
 ---
 
