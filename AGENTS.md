@@ -92,16 +92,19 @@ never from "the current repository", which is usually somebody else's.
 |---|---|
 | Nobody can say what "done" is | `@spec-writer` first, then stop for a human. |
 | You cannot tell which row this is | `crew` skill - it classifies, then carries it out. |
-| One file, one sitting | Do it. No plan, no delegation. |
-| Several files, one concern | Do it, sending `@explore` first if you need to locate things. |
+| One file, one sitting | Do it. No plan. |
+| Several files, one concern | `@explore` to locate, `@implementer` to write. No plan. |
 | Multiple concerns, one session | `plan` skill, then implement in order. |
 | Independent slices, one repo, one commit | `/fleet`. |
 | Independent slices needing their own branches | `fanout` skill. |
 | One change across several repositories | `multi-repo` skill. |
 | Anything touching auth, money, personal data | `harden` skill before the PR. |
 
-Delegation has a floor cost. If explaining the task takes longer than doing it,
-do it.
+Delegation has a floor cost, and it is lower than it feels: the brief is
+something you had to write down anyway. It is only not worth paying when the
+brief would be longer than the diff - a one-line fix, a rename, a version bump.
+Reading, on the other hand, is always worth delegating: send `@explore` before
+you decide anything, and keep its answer rather than what it read.
 
 ## Delegation rules
 

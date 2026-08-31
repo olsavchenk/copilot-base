@@ -6,9 +6,11 @@ version of it is worse, slower and costs credits.
 
 Verified against **GitHub Copilot CLI 1.0.80** on 2026-08-27, from
 `copilot --help`, the `copilot help` topics, and the agent definitions and
-schemas shipped inside the npm package; the model and effort section re-verified
-against **1.0.81** on 2026-08-31. Re-verify with the commands at the bottom -
-this moves fast.
+schemas shipped inside the npm package; the model and effort section, and the
+autopilot permission behaviour under Budgets and modes, re-verified against
+**1.0.81** on 2026-08-31 - the latter against `copilot help permissions` and the
+strings in the shipped binary. Re-verify with the commands at the bottom - this
+moves fast.
 
 ---
 
@@ -153,12 +155,9 @@ these is true:
 Otherwise the session runs with no protected-path guard, no branch guard and no
 verification - and says nothing about it. The debug log is the only tell:
 *"Loading repo hooks in prompt mode (folder is trusted or opt-in set)"*.
-
-Otherwise the session runs with no guards and says nothing about it. The debug
-log is the only tell: *"Loading repo hooks in prompt mode (folder is trusted or
-opt-in set)"*. Everything in `scripts/` sets the opt-in for the sessions it
-starts, so a repository that carries its own hooks still gets them; the base's
-own guards do not depend on it.
+Everything in `scripts/` sets the opt-in for the sessions it starts, so a
+repository that carries its own hooks still gets them; the base's own guards do
+not depend on it.
 
 For repository hooks, both command forms resolve against the repository root:
 
@@ -238,10 +237,46 @@ commits, or a check that cannot run twice at once are not. That is what
   - reasoning effort, per session.
 - `--mode interactive|plan|autopilot`, `--plan`, `--autopilot`,
   `--max-autopilot-continues <n>` - autopilot is what buys long autonomy in one
-  process.
+  process. **It does not grant permissions** - see below.
 - `--output-format json` - JSONL, one event per line. The full schema ships in
   the package at `schemas/session-events.schema.json`.
 - `--model`, `COPILOT_MODEL`, `/model`.
+
+### Autopilot is a mode, not a permission grant
+
+The trap that costs a whole run, verified against 1.0.81 on 2026-08-31.
+
+Entering autopilot asks *"Autopilot mode works best with all permissions
+enabled"*, and the answer is load-bearing. Decline it - "No", or "Keep current
+permissions" - and the session runs in what the CLI calls **limited
+permissions**: it no longer prompts, and there is nobody to prompt, so every tool
+call without a standing approval rule is **auto-denied**. The banner says so once
+and then never again:
+
+> Autopilot mode enabled with limited permissions. Some operations may be
+> auto-denied. Use /allow-all to grant full permissions.
+
+The failure looks like a broken install rather than a permission setting. Reads
+still work - `view`, `grep`, `glob` need no approval - while shell commands and
+every file edit come back with:
+
+```
+Permission denied and could not request permission from user
+```
+
+The internal reason code is `denied-no-approval-rule-and-could-not-request-from-user`,
+which is the whole diagnosis: no rule matched, and asking was not possible.
+
+Three ways out, all equivalent: `/allow-all` in the session, *Yes, remember for
+future* at the autopilot prompt (it persists per location in
+`~/.copilot/permissions-config.json`), or `--allow-all-tools` on the command
+line. Non-interactive `-p` runs need the flag for the same reason, which is why
+`delegatedArgs()` always passes it.
+
+Elevating there does not disable this base. The guards are user-level hooks and
+fire in every session whatever the permission mode is, and a hook `deny` beats
+`--allow-all-tools` - which is the whole reason it is safe to hand the CLI's
+prompting layer over and keep the guardrails in the hooks.
 
 ## Model and effort
 
@@ -267,8 +302,12 @@ one slice at a time.
 
 Built-in subagents have their own settings, reachable through `/subagents`:
 `copilot_cli_execution_subagent_model` for `task` and
-`copilot_cli_search_subagent_model` for `explore`. Both default to a cheap model
-already; there is no reason to raise them.
+`copilot_cli_search_subagent_model` for `explore`. Both ship pinned to
+`claude-haiku-4.5` in the definitions inside the package
+(`definitions/explore.agent.yaml`, `definitions/task.agent.yaml`), so the survey
+in the `crew` skill is already running on the cheap model without anyone
+configuring it. Those two settings exist to *override* that; there is no reason
+to raise them.
 
 The assignment this base ships:
 
