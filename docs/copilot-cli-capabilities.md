@@ -9,8 +9,10 @@ Verified against **GitHub Copilot CLI 1.0.80** on 2026-08-27, from
 schemas shipped inside the npm package; the model and effort section, and the
 autopilot permission behaviour under Budgets and modes, re-verified against
 **1.0.81** on 2026-08-31 - the latter against `copilot help permissions` and the
-strings in the shipped binary. Re-verify with the commands at the bottom - this
-moves fast.
+strings in the shipped binary. The agent frontmatter keys, including
+`reasoning-effort`, were re-checked on 2026-09-01 against `sdk/index.d.ts`,
+`changelog.json` and the frontmatter key table in the shipped runtime. Re-verify
+with the commands at the bottom - this moves fast.
 
 ---
 
@@ -39,15 +41,16 @@ Custom agents are `*.agent.md` files with YAML frontmatter:
 | `~/.copilot/agents/` | personal, wins over a repository agent of the same name |
 | plugin `agents/` | whatever the plugin ships |
 
-Frontmatter: `description` (required), `name`, `tools`, `model`, `target`,
-`mcp-servers`, `metadata`, `disable-model-invocation`, `user-invocable`.
-`tools` accepts a comma-separated string or a list, `["*"]` for everything,
-`[]` for nothing, and MCP-namespaced entries like `github-mcp-server/get_commit`.
-Prompt bodies are capped at 30,000 characters.
+Frontmatter: `description` (required), `name`, `tools`, `model`,
+`reasoning-effort`, `target`, `mcp-servers`, `metadata`,
+`disable-model-invocation`, `user-invocable`, `deferred-tool-loading`,
+`strict-tools-list`. `tools` accepts a comma-separated string or a list, `["*"]`
+for everything, `[]` for nothing, and MCP-namespaced entries like
+`github-mcp-server/get_commit`. Prompt bodies are capped at 30,000 characters.
 
-**There is no `effort:` key.** Model is per agent; reasoning effort is not - see
-[Model and effort](#model-and-effort) below, because the difference decides where
-in this base each one can be set.
+**The key is `reasoning-effort:`, not `effort:`** - kebab-case in frontmatter,
+`reasoningEffort` on `AgentDefinition` in the shipped SDK types. Both knobs are
+per agent; see [Model and effort](#model-and-effort) below.
 
 Invoke one with `@name` in a prompt, `/agent name`, or `--agent name`. Work done
 by a custom agent runs in a subagent with its own context window.
@@ -234,7 +237,8 @@ commits, or a check that cannot run twice at once are not. That is what
 - `--max-ai-credits <n>` and `/limits` - a soft cap per session, shared by its
   subagents. Fleet mode multiplies model calls by design; cap it.
 - `--effort none|minimal|low|medium|high|xhigh|max` (alias `--reasoning-effort`)
-  - reasoning effort, per session.
+  - the session default. An agent's own `reasoning-effort:` wins over it; a
+  `/subagents` override wins over both.
 - `--mode interactive|plan|autopilot`, `--plan`, `--autopilot`,
   `--max-autopilot-continues <n>` - autopilot is what buys long autonomy in one
   process. **It does not grant permissions** - see below.
@@ -280,20 +284,22 @@ prompting layer over and keep the guardrails in the hooks.
 
 ## Model and effort
 
-The two knobs are not symmetrical, and the asymmetry is the whole story.
+Both knobs bind to the role, not to the run.
 
 **Model is per agent.** `model:` in `*.agent.md` frontmatter binds a model to a
 role, and it holds wherever that agent runs - invoked as `@name`, dispatched by
-`/fleet`, or started by `--agent`. Model ids in 1.0.81 include `claude-opus-5`,
-`claude-sonnet-5`, `claude-haiku-4.5`, `claude-opus-4.8-fast`, the `gpt-5.x`
-family and `gemini-3.x`. `--model`, `COPILOT_MODEL` and `/model` set the session
-default that an agent without a `model:` inherits.
+`/fleet`, or started by `--agent`. The value is the model's name as `/model`
+lists it, provider suffix included - `Claude Sonnet 5 (copilot)`. `--model`,
+`COPILOT_MODEL` and `/model` set the session default that an agent without a
+`model:` inherits.
 
-**Effort is per session.** It is resolved once, when the session starts, and
-every subagent that session dispatches inherits it. So within one run, the agent
-doing the thinking and the agent doing the typing necessarily share a level.
-Effort becomes per-unit only where each unit gets its own process - which in this
-base means `fanout.mjs` slices, one `copilot` invocation each.
+**Effort is per agent too**, since 1.0.66 (*"Let custom agents set reasoning
+effort in their definitions"*). `reasoning-effort:` in the same frontmatter takes
+`none`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`. Precedence runs
+agent definition over session default over nothing; a `/subagents` override beats
+the definition. So the agent doing the thinking and the agent doing the typing no
+longer have to share a level, and `--effort` is now the floor for agents that
+decline to pin one - which, in this base, is none of them.
 
 The CLI refuses an effort level when the model is `auto`
 (*"Reasoning effort is not supported when using the auto model"*), so
@@ -311,13 +317,22 @@ to raise them.
 
 The assignment this base ships:
 
-| Agents | Model | Why |
-|---|---|---|
-| `tech-lead`, `critic`, `spec-writer`, `rollout`, `integrator` | `claude-sonnet-5` | decompose, judge, resolve conflicts - work where a wrong call is expensive downstream |
-| `implementer`, `test-author`, `docs-writer`, `impact-scout`, `memory-keeper` | `claude-haiku-4.5` | execute a written brief, or search and summarise |
+| Agent | Model | Effort | Why |
+|---|---|---|---|
+| `tech-lead` | `Claude Sonnet 5 (copilot)` | `high` | decomposing wrong is expensive for every slice downstream |
+| `critic` | `Claude Sonnet 5 (copilot)` | `high` | it exists to find what a first pass missed |
+| `integrator` | `Claude Sonnet 5 (copilot)` | `high` | reconciling interfaces that drifted apart is a judgement call |
+| `rollout` | `Claude Sonnet 5 (copilot)` | `high` | ordering releases across repositories, where a wrong order breaks consumers |
+| `spec-writer` | `Claude Sonnet 5 (copilot)` | `medium` | judgement, but bounded - it writes criteria, not designs |
+| `implementer` | `Claude Haiku 4.5 (copilot)` | `medium` | the brief is written; the code still is not |
+| `test-author` | `Claude Haiku 4.5 (copilot)` | `medium` | tests from a spec, where the thinking is in the spec |
+| `docs-writer` | `Claude Haiku 4.5 (copilot)` | `medium` | deciding what a change means for the reader is not transcription |
+| `impact-scout` | `Claude Haiku 4.5 (copilot)` | `low` | search and summarise |
+| `memory-keeper` | `Claude Haiku 4.5 (copilot)` | `medium` | judging what is durable enough to keep, and what to drop |
 
-`integrator` sits on the thinking side deliberately: reconciling interfaces that
-drifted apart is a judgement call, not a merge.
+`check.mjs` fails an agent that pins neither, because an unset key silently
+inherits the session's choice - the opposite of routing a role on purpose.
+
 
 ## Tool names
 

@@ -1,7 +1,8 @@
 ---
 name: tech-lead
 description: Decomposes a feature or initiative into independently shippable slices with explicit interfaces, verification criteria and a delegation plan. Use before writing any code on work that spans more than one file or one session. Does not implement.
-model: claude-sonnet-5
+model: "Claude Sonnet 5 (copilot)"
+reasoning-effort: high
 tools: ["grep", "glob", "view", "bash", "read_bash", "stop_bash", "powershell", "read_powershell", "stop_powershell", "lsp", "web_search", "web_fetch"]
 ---
 

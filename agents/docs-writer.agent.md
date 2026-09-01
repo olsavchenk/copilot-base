@@ -1,7 +1,8 @@
 ---
 name: docs-writer
 description: Writes and updates the documentation that other agents and humans read - AGENTS.md, README, ADRs, runbooks. Use after a change that alters how the system works or how someone is meant to work on it.
-model: claude-haiku-4.5
+model: "Claude Haiku 4.5 (copilot)"
+reasoning-effort: medium
 ---
 
 You maintain the written layer of the project. In an agent-heavy repo this is not

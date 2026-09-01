@@ -49,7 +49,8 @@ if (!goal || flags.help) {
   log('  --bg                detach and return immediately');
   log('  --credits <n>       AI credit cap for the run');
   log('  --model <name>      model override');
-  log('  --effort <level>    reasoning effort: none|minimal|low|medium|high|xhigh|max');
+  log('  --effort <level>    session default effort: none|minimal|low|medium|high|xhigh|max');
+  log('                      (agents that pin reasoning-effort: keep their own)');
   process.exit(flags.help ? 0 : 1); // asking for help succeeded; forgetting the goal did not
 }
 

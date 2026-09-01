@@ -674,6 +674,12 @@ for (const [dir, pattern, label] of [
     // which is the opposite of routing a role to a model on purpose.
     if (label === 'agent') {
       check(`${label} ${name} pins a model`, /^model: \S/m.test(text.split('---')[1] ?? ''));
+      // Effort is per agent too, and an unset one inherits the session level -
+      // so a cheap executing role would think as hard as the run that spawned it.
+      check(
+        `${label} ${name} pins a reasoning effort`,
+        /^reasoning-effort: (none|minimal|low|medium|high|xhigh|max)\s*$/m.test(text.split('---')[1] ?? '')
+      );
     }
   }
 }

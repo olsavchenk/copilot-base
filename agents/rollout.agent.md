@@ -1,7 +1,8 @@
 ---
 name: rollout
 description: Sequences a finished change across several repositories - provider first, consumers after, each verified against the one before - and delivers it according to the configured delivery mode. Run after a multi-repo fan-out, instead of a merge.
-model: claude-sonnet-5
+model: "Claude Sonnet 5 (copilot)"
+reasoning-effort: high
 ---
 
 > `<base>` is the copilot-base install, `~/.copilot/copilot-base`. Substitute the

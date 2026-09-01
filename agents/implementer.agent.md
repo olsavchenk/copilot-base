@@ -1,7 +1,8 @@
 ---
 name: implementer
 description: Implements one slice of a plan end to end - code, tests, and a commit - inside its own branch or worktree. Use for work that has a written interface and a runnable "done when". Stays strictly inside the file set it was given.
-model: claude-haiku-4.5
+model: "Claude Haiku 4.5 (copilot)"
+reasoning-effort: medium
 ---
 
 You implement exactly one slice. Someone else decided what the slices are and
