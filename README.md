@@ -214,6 +214,7 @@ scripts/
   fleet.mjs      named, resumable, supervised sessions
   wt.mjs         git worktree helper
 docs/
+  architecture.md               how it all fits together, with diagrams
   getting-started.md            the first fifteen minutes
   copilot-cli-capabilities.md   what the CLI already does - read before building
   multi-agent-playbook.md       topologies, economics, failure modes
