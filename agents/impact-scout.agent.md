@@ -1,7 +1,8 @@
 ---
 name: impact-scout
 description: Finds every consumer of an API, type, endpoint or schema across many repositories, using GitHub code search plus local clones. Use before changing anything shared, to learn who breaks. Read-only, never edits.
-model: claude-haiku-4.5
+model: "Claude Haiku 4.5 (copilot)"
+reasoning-effort: low
 tools: ["grep", "glob", "view", "bash", "read_bash", "stop_bash", "powershell", "read_powershell", "stop_powershell", "lsp", "github-mcp-server/search_code", "github-mcp-server/search_repositories", "github-mcp-server/get_file_contents", "github-mcp-server/list_pull_requests", "github-mcp-server/get_pull_request", "github-mcp-server/list_commits"]
 ---
 

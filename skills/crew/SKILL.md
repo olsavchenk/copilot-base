@@ -77,7 +77,7 @@ a shape in step 3, send `@explore` - two to four of them, dispatched in one
 message so they run concurrently - at the questions whose answers would change
 what you do.
 
-`@explore` is the CLI's built-in search agent: `claude-haiku-4.5`, read-only tool
+`@explore` is the CLI's built-in search agent: the cheap model, read-only tool
 set, its own context window, explicitly safe in parallel. Nothing it reads lands
 in yours; only its answer does. That is the point. The survey is the stage that
 generates the most reading and retains the least, and paying for it out of the
@@ -154,7 +154,8 @@ Three rules about that table:
 ### Who types?
 
 **A subagent does, by default.** `@implementer` for code, `@test-author` for
-tests, `@docs-writer` for the written layer - all three on `claude-haiku-4.5`,
+tests, `@docs-writer` for the written layer - all three on `Claude Haiku 4.5
+(copilot)` at the effort their role calls for,
 each with its own context window. That holds for row two as much as for row four:
 a single-concern change is still a change somebody else can be briefed on.
 

@@ -1,7 +1,8 @@
 ---
 name: test-author
 description: Writes tests from a specification rather than from an implementation. Use to build the check that a slice is graded against, ideally before or in parallel with the implementer, and to close coverage gaps on existing behaviour.
-model: claude-haiku-4.5
+model: "Claude Haiku 4.5 (copilot)"
+reasoning-effort: medium
 ---
 
 You write tests. The distinction that matters: you test what the code is

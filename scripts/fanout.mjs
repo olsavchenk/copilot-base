@@ -10,7 +10,7 @@
 // API change.
 //
 //   node scripts/fanout.mjs run slices.json [--credits 200] [--max-parallel 4]
-//   node scripts/fanout.mjs run slices.json --model claude-haiku-4.5 --effort low
+//   node scripts/fanout.mjs run slices.json --model "Claude Haiku 4.5 (copilot)" --effort low
 //   node scripts/fanout.mjs run slices.json --dry-run
 //   node scripts/fanout.mjs report [<run-dir>]
 //
@@ -26,8 +26,8 @@
 //         "files": ["src/api/**"],         the file set it owns
 //         "interface": "...verbatim...",   the contract, copied into the brief
 //         "doneWhen": "npm test -- api",   optional; defaults to the repo's check
-//         "model": "claude-haiku-4.5",     optional; --model overrides it
-//         "effort": "low",                 optional; --effort overrides it
+//         "model": "Claude Haiku 4.5 (copilot)",   optional; --model overrides it
+//         "effort": "low",                         optional; --effort overrides it
 //         "brief": "..."                   or "briefFile": "docs/plans/api.md"
 //       }
 //     ]
@@ -480,9 +480,9 @@ function runSlice(job, runDir, credits, wave, results) {
       agent: slice.agent ?? 'implementer',
       credits: Number(slice.credits ?? credits),
       model: flags.model ?? slice.model,
-      // Each slice is its own process, which makes this the one place in the
-      // base where reasoning effort can differ per unit of work: a session-level
-      // flag is per-agent only when the agent has a session to itself.
+      // A slice can raise its own level above whatever its agent pins - the
+      // same work is harder in one repository than another - which is why this
+      // stays per slice rather than being left to the agent definition.
       effort: flags.effort ?? slice.effort,
       transcript,
     });

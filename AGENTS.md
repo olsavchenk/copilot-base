@@ -118,11 +118,12 @@ you decide anything, and keep its answer rather than what it read.
   not a merge at all, it is `@rollout`.
 - **Send `@explore` for volume, `@impact-scout` across repositories.**
 - **Cap what you spawn.** Every background session gets `--max-ai-credits`.
-- **Match the model to the role, not to the run.** Each agent pins its own
-  `model:`: the deciding roles on `claude-sonnet-5`, the executing ones on
-  `claude-haiku-4.5`. Reasoning effort cannot follow, because it belongs to the
-  session rather than the agent - so a level chosen for one run applies to every
-  agent in it, and per-unit effort exists only across `fanout.mjs` slices.
+- **Match the model and the effort to the role, not to the run.** Each agent
+  pins its own `model:` and `reasoning-effort:`: the deciding roles on
+  `Claude Sonnet 5 (copilot)` at `high` or `medium`, the executing ones on
+  `Claude Haiku 4.5 (copilot)` at `medium` or `low`. Both hold wherever the agent
+  runs, so `--effort` on a run only sets the default for an agent that pins
+  nothing - and `check.mjs` fails any agent that does.
 
 ## Verification
 

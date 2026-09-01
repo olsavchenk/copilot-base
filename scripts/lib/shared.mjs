@@ -153,12 +153,13 @@ export function delegatedEnv(extra = {}) {
  * sessions. --no-ask-user because nobody is watching. --max-ai-credits because
  * a fan-out multiplies model calls by design and an unbounded one is a bill.
  *
- * On `effort`: reasoning effort is a property of the *session*, not of an agent.
- * There is no `effort:` in agent frontmatter, so every subagent a session starts
- * inherits the level set here. Per-unit effort is only real where each unit gets
- * its own process, which means fanout slices. The CLI also rejects an effort
- * level when the model is `auto`, so that combination is refused here with a
- * readable message rather than a dozen slices failing to start.
+ * On `effort`: this sets the session default only. Agents pin their own
+ * `reasoning-effort:` in frontmatter and that wins, so a level passed here
+ * reaches an agent only if the agent declined to choose one - which none of the
+ * agents in this base do. It still matters for `--agent`-less runs and as the
+ * level the main session thinks at. The CLI rejects an effort level when the
+ * model is `auto`, so that combination is refused here with a readable message
+ * rather than a dozen slices failing to start.
  */
 export function delegatedArgs({ prompt, agent, credits, model, effort, transcript, extraDeny = [] }) {
   const args = [

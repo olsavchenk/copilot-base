@@ -1,7 +1,8 @@
 ---
 name: critic
 description: Adversarial review of a plan or design before code is written. Hunts over-engineering, missed requirements, wrong seams and simpler alternatives, and ends with an explicit verdict. Run against a tech-lead plan, not against a diff.
-model: claude-sonnet-5
+model: "Claude Sonnet 5 (copilot)"
+reasoning-effort: high
 tools: ["grep", "glob", "view", "bash", "read_bash", "stop_bash", "powershell", "read_powershell", "stop_powershell", "lsp"]
 ---
 
