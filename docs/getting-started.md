@@ -174,6 +174,7 @@ number that says whether any of this is working.
 
 | Question | Document |
 |---|---|
+| How do all the pieces fit together? | [architecture.md](architecture.md) |
 | Which workflow for this kind of work? | [workflows.md](workflows.md) |
 | Why is it built this way? | [multi-agent-playbook.md](multi-agent-playbook.md) |
 | What does the CLI already do natively? | [copilot-cli-capabilities.md](copilot-cli-capabilities.md) |
